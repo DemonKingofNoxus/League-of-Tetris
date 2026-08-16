@@ -1,0 +1,196 @@
+:root {
+  --bg: #070a0f;
+  --panel: #111823;
+  --panel-2: #0d141d;
+  --line: #223044;
+  --text: #e7edf5;
+  --muted: #8b9bb1;
+  --accent: #c8aa6e;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+}
+
+/* ---------- masthead ---------- */
+#masthead { text-align: center; margin-bottom: 20px; }
+
+#masthead h1 {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.tagline { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+
+/* ---------- layout ---------- */
+#stage {
+  display: grid;
+  grid-template-columns: 180px auto 240px;
+  gap: 20px;
+  justify-content: center;
+  align-items: start;
+}
+
+/* The 34px of headroom is the toast's lane — it keeps chain popups off the
+   spawn area. The rails match it so the panel tops line up with the board. */
+.rail { display: flex; flex-direction: column; gap: 12px; padding-top: 34px; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.panel h2 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.stat { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat-big { font-size: 30px; color: var(--accent); }
+
+/* ---------- board ---------- */
+.board-wrap { position: relative; line-height: 0; padding-top: 34px; }
+
+#board {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #0b111a;
+  touch-action: manipulation;
+}
+
+#next { display: block; margin: 0 auto; }
+
+/* ---------- lists ---------- */
+.champ-list, .region-list { list-style: none; margin: 0; padding: 0; }
+
+.champ-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.champ-list li:last-child { border-bottom: 0; }
+.champ-list b { display: block; color: var(--accent); }
+.champ-list span { display: block; font-size: 12px; color: var(--text); }
+.champ-list em { display: block; font-style: normal; font-size: 12px; color: var(--muted); }
+.champ-empty { color: var(--muted); font-size: 12px; }
+
+.region-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 3px 0;
+  color: var(--muted);
+}
+
+.swatch {
+  width: 14px; height: 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.4);
+  flex: none;
+}
+
+/* ---------- overlay ---------- */
+.overlay {
+  position: absolute;
+  inset: 34px 0 0;   /* top offset matches .board-wrap's toast lane */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(7, 10, 15, 0.86);
+  border-radius: 10px;
+  line-height: 1.5;
+}
+
+.overlay.hidden { display: none; }
+
+.overlay-card { text-align: center; padding: 20px; }
+.overlay-card h2 { margin: 0 0 6px; font-size: 24px; color: var(--accent); }
+.overlay-card p { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+
+.overlay-card button, .touch button {
+  background: var(--accent);
+  color: #16110a;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.overlay-card button:hover { filter: brightness(1.1); }
+
+/* ---------- toast ---------- */
+.toast {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -8px);
+  background: rgba(10, 14, 20, 0.94);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- touch ---------- */
+.touch { display: none; gap: 8px; justify-content: center; margin-top: 16px; }
+.touch button { min-width: 58px; padding: 14px 0; font-size: 18px; }
+
+/* ---------- help ---------- */
+#help { margin-top: 22px; text-align: center; color: var(--muted); font-size: 12px; }
+#help p { margin: 0; }
+
+kbd {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text);
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 900px) {
+  #stage { grid-template-columns: 1fr; justify-items: center; }
+  .rail { flex-direction: row; flex-wrap: wrap; justify-content: center; width: 100%; padding-top: 0; }
+  .panel { flex: 1 1 140px; min-width: 130px; }
+  .touch { display: flex; }
+  #help { display: none; }
+}

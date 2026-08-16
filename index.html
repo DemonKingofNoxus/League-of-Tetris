@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Runeterra Blocks</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <header id="masthead">
+    <h1>Runeterra Blocks</h1>
+    <p class="tagline">Match regions. Trigger champions. Survive.</p>
+  </header>
+
+  <main id="stage">
+
+    <!-- ---------- left rail ---------- -->
+    <aside class="rail rail-left">
+      <section class="panel">
+        <h2>Score</h2>
+        <div class="stat stat-big" id="ui-score">0</div>
+      </section>
+      <section class="panel">
+        <h2>Level</h2>
+        <div class="stat" id="ui-level">1</div>
+      </section>
+      <section class="panel">
+        <h2>Cleared</h2>
+        <div class="stat" id="ui-cleared">0</div>
+      </section>
+      <section class="panel">
+        <h2>Best chain</h2>
+        <div class="stat" id="ui-chain">0</div>
+      </section>
+    </aside>
+
+    <!-- ---------- board ---------- -->
+    <section class="board-wrap">
+      <canvas id="board" width="320" height="640" aria-label="Game board"></canvas>
+
+      <div id="overlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2 id="overlay-title">Paused</h2>
+          <p id="overlay-body">Press P to resume.</p>
+          <button id="overlay-btn" type="button">Play</button>
+        </div>
+      </div>
+
+      <div id="toast" class="toast"></div>
+    </section>
+
+    <!-- ---------- right rail ---------- -->
+    <aside class="rail rail-right">
+      <section class="panel">
+        <h2>Next</h2>
+        <canvas id="next" width="128" height="128"></canvas>
+      </section>
+
+      <section class="panel">
+        <h2>Champions on board</h2>
+        <ul id="ui-champs" class="champ-list">
+          <li class="champ-empty">none — click one when it lands</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>Regions</h2>
+        <ul id="ui-regions" class="region-list"></ul>
+      </section>
+    </aside>
+
+  </main>
+
+  <!-- ---------- touch controls ---------- -->
+  <div id="touch" class="touch">
+    <button data-act="left"  type="button" aria-label="Move left">◀</button>
+    <button data-act="rot"   type="button" aria-label="Rotate">⟳</button>
+    <button data-act="right" type="button" aria-label="Move right">▶</button>
+    <button data-act="down"  type="button" aria-label="Soft drop">▼</button>
+    <button data-act="drop"  type="button" aria-label="Hard drop">⇩</button>
+  </div>
+
+  <footer id="help">
+    <p>
+      <kbd>←</kbd><kbd>→</kbd> move &nbsp;·&nbsp;
+      <kbd>↓</kbd> soft drop &nbsp;·&nbsp;
+      <kbd>↑</kbd>/<kbd>X</kbd> rotate &nbsp;·&nbsp;
+      <kbd>Z</kbd> rotate back &nbsp;·&nbsp;
+      <kbd>Space</kbd> hard drop &nbsp;·&nbsp;
+      <kbd>P</kbd> pause &nbsp;·&nbsp;
+      <kbd>R</kbd> restart &nbsp;·&nbsp;
+      <b>click a champion</b> to fire its ability
+    </p>
+  </footer>
+
+</div>
+
+<script src="src/config.js"></script>
+<script src="src/assets.js"></script>
+<script src="src/engine.js"></script>
+<script src="src/abilities.js"></script>
+<script src="src/render.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
