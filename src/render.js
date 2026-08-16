@@ -15,23 +15,33 @@
     this.ctx = canvas.getContext('2d');
     this.nextCanvas = nextCanvas;
     this.nextCtx = nextCanvas.getContext('2d');
+
+    /* Remember the logical size once. Assigning canvas.width also rewrites the
+       width attribute, so re-reading it after scaling would compound the
+       device-pixel-ratio on every resize and blow the drawing off-canvas. */
+    this.w = Number(canvas.getAttribute('width'));
+    this.h = Number(canvas.getAttribute('height'));
+    this.nextW = Number(nextCanvas.getAttribute('width'));
+    this.nextH = Number(nextCanvas.getAttribute('height'));
+
     this.scale();
   }
 
   /* Match the backing store to the device pixel ratio so tiles stay crisp. */
   Renderer.prototype.scale = function () {
     const dpr = window.devicePixelRatio || 1;
-    [[this.canvas, this.ctx], [this.nextCanvas, this.nextCtx]].forEach(function (pair) {
-      const el = pair[0], ctx = pair[1];
-      const w = el.getAttribute('width'), h = el.getAttribute('height');
+    const sizes = [
+      [this.canvas, this.ctx, this.w, this.h],
+      [this.nextCanvas, this.nextCtx, this.nextW, this.nextH]
+    ];
+    sizes.forEach(function (s) {
+      const el = s[0], ctx = s[1], w = s[2], h = s[3];
       el.width = w * dpr;
       el.height = h * dpr;
       el.style.width = w + 'px';
       el.style.height = h + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     });
-    this.w = Number(this.canvas.getAttribute('width'));
-    this.h = Number(this.canvas.getAttribute('height'));
   };
 
   /* ---------- tile drawing ---------- */
@@ -186,8 +196,8 @@
 
   Renderer.prototype.drawNext = function (piece) {
     const ctx = this.nextCtx;
-    const w = Number(this.nextCanvas.getAttribute('width'));
-    const h = Number(this.nextCanvas.getAttribute('height'));
+    const w = this.nextW;
+    const h = this.nextH;
     ctx.clearRect(0, 0, w, h);
     if (!piece) return;
 

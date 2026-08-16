@@ -1,125 +1,123 @@
-# Art you need to provide
+# Art pipeline
 
-Every file listed here already exists as a **placeholder** so the game looks
-finished right now. Overwrite them one at a time — keep the filename, and the
-new art appears with no code changes. If you delete a file instead, the game
-falls back to a flat coloured tile with a label and keeps working.
+Your original files live in **`assets/source/`** and are never modified.
+`tools/process-art.py` turns them into the 128×128 tiles the game actually
+loads, in `assets/regions/` and `assets/champions/`.
 
-Paths are set in `src/config.js`. Change `.svg` to `.png` there if you prefer
-PNGs; the loader accepts any format the browser can display.
+```bash
+python3 tools/process-art.py
+```
+
+Requires Pillow: `pip install Pillow`.
 
 ---
 
-## 1. Region crests — 6 files, **highest priority**
+## What is already done
 
-`assets/regions/<name>.svg`
+**Region crests** — the six PNGs you supplied were already gold on a
+transparent background, so there was no white background to remove. The script
+trims the empty margin, pads each one to a square (the renderer draws tiles
+square and would otherwise stretch a 101×162 crest), brightens the gold, and
+adds a dark drop shadow so the crest still reads on the gold-ish Shurima tile.
 
-| File | Region | Fallback colour |
+The tile background colour is the region colour from `src/config.js`, kept
+deliberately muted so six of them on screen at once are easy on the eyes:
+
+| Region | Colour | Source file |
 | --- | --- | --- |
-| `demacia.svg` | Demacia | `#d8b45a` |
-| `noxus.svg` | Noxus | `#bf3b34` |
-| `ionia.svg` | Ionia | `#d97ab8` |
-| `freljord.svg` | Freljord | `#5fb6dd` |
-| `zaun.svg` | Zaun | `#6cc24a` |
-| `bilgewater.svg` | Bilgewater | `#d4772c` |
+| Noxus | `#a8474a` muted red | `noxus_crest_icon.png` |
+| Void | `#8a63ad` muted purple | `void_crest_icon.png` |
+| Freljord | `#5b90bd` muted blue | `freljord_crest_icon.png` |
+| Zaun | `#67a15c` muted green | `zaun_crest_icon.png` |
+| Ionia | `#c47ba0` muted pink | `iona_crest_icon.png` |
+| Shurima | `#9a7830` deep amber | `shurima_crest_icon.png` |
 
-**Specs**
+Shurima is the one that had to move away from a bright yellow: a gold crest on
+a gold tile was invisible. It is still clearly the yellow one, just deeper.
 
-- Square, `viewBox="0 0 100 100"` (or a square PNG at 128×128).
-- **Transparent background.** The tile already draws a coloured plate behind it.
-- **Single flat colour — white.** The plate supplies the colour; a white glyph
-  reads on every region.
-- **Bold silhouettes only.** These render at about **26×26 physical pixels**.
-  Thin lines merge into a grey smudge at that size. Keep strokes at 10+ units in
-  a 100-unit viewBox, and avoid more than 2–3 separate shapes per crest.
-- Test by squinting at it small. If you cannot tell it apart from the other five
-  at 26px, it is too detailed.
+**Champion portraits** — the six splash arts were cropped square and centred on
+each champion's head. Splash art at 26px is an unreadable smudge, so each crop
+is tight to the face. The zoom is set **per champion**, because Darius is
+painted much closer to camera than Sejuani; a single shared value would make him
+a nostril and her a speck.
 
-The official region crests are quite intricate — you will likely need to
-simplify them to their outer silhouette rather than use them directly.
+## Re-framing a portrait
 
-## 2. Champion portraits — 6 files
+Everything is in one table at the top of `tools/process-art.py`:
 
-`assets/champions/<name>.svg`
+```python
+# champion key -> (source, head_x, head_y, crop_height)
+CHAMPIONS = {
+    'ahri':    ('Ahri.jpg',    0.555, 0.200, 0.32),
+    'darius':  ('Darius.jpg',  0.530, 0.180, 0.36),
+    'kaisa':   ('Kaisa.jpg',   0.498, 0.180, 0.32),
+    'sejuani': ('Sejuani.jpg', 0.540, 0.180, 0.19),
+    'sivir':   ('Sivir.jpg',   0.533, 0.136, 0.22),
+    'twitch':  ('Twitch.jpg',  0.658, 0.331, 0.22),
+}
+```
 
-| File | Champion | Region |
-| --- | --- | --- |
-| `darius.svg` | Darius | Noxus |
-| `lux.svg` | Lux | Demacia |
-| `ziggs.svg` | Ziggs | Zaun |
-| `ashe.svg` | Ashe | Freljord |
-| `yasuo.svg` | Yasuo | Ionia |
-| `miss-fortune.svg` | Miss Fortune | Bilgewater |
+- `head_x`, `head_y` — where the head is, as a fraction of the image
+  (0.5, 0.5 = dead centre). Move the crop *right* by raising `head_x`.
+- `crop_height` — how much of the image height the square covers.
+  **Smaller = more zoomed in.**
 
-**Specs**
+Change a number, re-run the script, reload the page. The crop is clamped to the
+image, so a value near an edge will not crash — it just stops moving.
 
-- Square, **128×128 PNG** is ideal here (portraits are photographic, so PNG
-  beats SVG). Transparent or filled background both work — this one is drawn
-  edge to edge on the tile.
-- Crop **tight to the face**. Full-body or waist-up art becomes an unreadable
-  smudge at 26px. Think Discord avatar, not splash art.
-- High contrast, bright subject. The board is dark.
-- The renderer already draws a white ring around champion tiles so players can
-  tell they are clickable — you do not need to add one.
+## Adding a new champion or region
 
-Riot's official square champion icons (the 120×120 ones used in-client) are
-exactly the right crop and size. They are fine for a free fan project; they are
-**not** licensed for a commercial release — see the note at the end of the
-README.
+**New region** — drop the crest in `assets/source/regions/`, add a line to
+`REGIONS` in `tools/process-art.py`, and add an entry to `LOL.REGIONS` in
+`src/config.js`:
 
-## 3. Optional extras
+```js
+shadowIsles: { name: 'Shadow Isles', short: 'SI', color: '#4d8f7a',
+               art: 'assets/regions/shadowIsles.png' }
+```
 
-These are not wired up yet. Tell me if you want them and I will add the code.
+It enters the piece pool automatically.
+
+**New champion** — drop the splash in `assets/source/champions/`, add a line to
+`CHAMPIONS` in `tools/process-art.py`, add an entry to `LOL.CHAMPIONS` in
+`src/config.js`, then write one function in `src/abilities.js`:
+
+```js
+// config.js
+thresh: {
+  name: 'Thresh', region: 'shadowIsles', ability: 'my_new_effect',
+  abilityName: 'Death Sentence',
+  desc: 'What it does, shown in the side panel.',
+  art: 'assets/champions/thresh.png'
+}
+
+// abilities.js — return the board indices to destroy
+my_new_effect: function (board, x, y) {
+  const destroy = [];
+  // board.get(x, y) / board.idx(x, y) / board.inside(x, y) / board.cols / board.rows
+  return { destroy: destroy };
+}
+```
+
+The champion's own cell is added to the destroy list automatically, and it will
+fire when a block of `region` touches it. Nothing else needs to change —
+`test/engine.test.js` will fail if you add a champion whose ability or region
+does not exist.
+
+## If art is missing
+
+Nothing breaks. A missing region file falls back to a flat coloured tile with a
+two-letter label; a missing champion file falls back to its initials. You can
+delete everything in `assets/` and the game still plays.
+
+## Optional extras, not wired up yet
+
+Say the word and I will add the code for any of these.
 
 | What | Size | Use |
 | --- | --- | --- |
 | Logo / wordmark | ~600×160 PNG or SVG, transparent | Replace the text title |
 | Board background | 320×640 PNG | Texture behind the grid |
 | Ability icons | 64×64 PNG each | Next to champion names in the side panel |
-| Sound effects | `.mp3`/`.ogg`, short | Lock, match, chain, ability, game over |
-| Music | `.mp3`/`.ogg`, looping | Background track |
-
----
-
-## Adding a new region or champion
-
-**New region** — add to `LOL.REGIONS` in `src/config.js`:
-
-```js
-shurima: { name: 'Shurima', short: 'SH', color: '#e0c169', art: 'assets/regions/shurima.svg' }
-```
-
-Drop `assets/regions/shurima.svg` in. That is it — it enters the piece pool
-automatically.
-
-**New champion** — add to `LOL.CHAMPIONS` in `src/config.js`, then write one
-function in `src/abilities.js` with a matching `ability` key:
-
-```js
-// config.js
-azir: {
-  name: 'Azir', region: 'shurima', ability: 'my_new_effect',
-  abilityName: 'Emperor\'s Divide',
-  desc: 'What it does, shown in the side panel.',
-  art: 'assets/champions/azir.svg'
-}
-
-// abilities.js — return the board indices to destroy
-my_new_effect: function (board, x, y) {
-  const destroy = [];
-  // ... board.get(x, y), board.idx(x, y), board.inside(x, y), board.cols, board.rows
-  return { destroy: destroy };
-}
-```
-
-The champion's own cell is added to the destroy list automatically. Nothing else
-in the codebase needs to change.
-
-## Regenerating the placeholders
-
-```bash
-node tools/gen-placeholder-art.js
-```
-
-Overwrites everything in `assets/` with the generated placeholders. Do not run
-this after you have added real art.
+| Sound effects | short `.mp3`/`.ogg` | Lock, row clear, pure row, ability, game over |
+| Music | looping `.mp3`/`.ogg` | Background track |

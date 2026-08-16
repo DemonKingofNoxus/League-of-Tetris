@@ -12,8 +12,8 @@
     next:     document.getElementById('next'),
     score:    document.getElementById('ui-score'),
     level:    document.getElementById('ui-level'),
-    cleared:  document.getElementById('ui-cleared'),
-    chain:    document.getElementById('ui-chain'),
+    rows:     document.getElementById('ui-rows'),
+    pure:     document.getElementById('ui-pure'),
     champs:   document.getElementById('ui-champs'),
     regions:  document.getElementById('ui-regions'),
     overlay:  document.getElementById('overlay'),
@@ -42,12 +42,16 @@
       lockTimer: 0,
       grounded: false,
       flash: null,
+      flashKind: null,         // 'rows' | 'ability'
       flashTimer: 0,
+      pendingRows: null,
+      resolveSteps: 0,
       chain: 0,
       bestChain: 0,
       score: 0,
       level: 1,
-      cleared: 0
+      rowsCleared: 0,
+      pureRows: 0
     };
     hideOverlay();
     syncUI();
@@ -58,51 +62,107 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Resolve cycle: match -> flash -> destroy -> gravity -> repeat        */
+  /* Resolve cycle                                                       */
+  /*   champions in contact fire first, then full rows clear, and the     */
+  /*   fallout of either can set off the next round as a chain.           */
   /* ------------------------------------------------------------------ */
 
-  function beginResolve(spawnAfter, preHits) {
+  function beginResolve(spawnAfter) {
     state.pendingSpawn = spawnAfter;
     state.chain = 0;
-    if (preHits && preHits.length) {
-      startFlash(new Set(preHits));
-    } else {
-      checkMatches();
-    }
+    state.resolveSteps = 0;
+    stepResolve();
   }
 
-  function startFlash(hits) {
-    state.flash = hits;
+  function stepResolve() {
+    /* Safety net: every step destroys at least one block, so this can only
+       trip if a champion is misconfigured. */
+    if (++state.resolveSteps > 200) { endResolve(); return; }
+
+    const trig = state.board.nextTriggeredChampion();
+    if (trig) {
+      const result = LOL.Abilities.trigger(state.board, trig.x, trig.y);
+      if (result) {
+        state.score += C.SCORE_ABILITY;
+        toast(result.champ.name + ' — ' + result.champ.abilityName);
+        startFlash(new Set(result.destroy), 'ability');
+        return;
+      }
+      /* Unknown ability — clear the block so we cannot loop on it. */
+      state.board.set(trig.x, trig.y, null);
+    }
+
+    const rows = state.board.fullRows();
+    if (rows.length) {
+      const cells = new Set();
+      const board = state.board;
+      rows.forEach(function (r) {
+        for (let x = 0; x < board.cols; x++) cells.add(board.idx(x, r.y));
+      });
+      state.pendingRows = rows;
+      startFlash(cells, 'rows');
+      return;
+    }
+
+    endResolve();
+  }
+
+  function startFlash(cells, kind) {
+    state.flash = cells;
+    state.flashKind = kind;
     state.flashTimer = C.FLASH_MS;
     state.phase = 'flash';
   }
 
-  function checkMatches() {
-    const hits = state.board.findMatches();
-    if (hits.size) startFlash(hits);
-    else endResolve();
-  }
-
   function commitFlash() {
-    const hits = state.flash;
     state.chain++;
-    state.board.remove(hits);
-    state.board.applyGravity();
-
-    state.score += hits.size * C.SCORE_PER_CELL * state.chain;
-    state.cleared += hits.size;
     state.bestChain = Math.max(state.bestChain, state.chain);
-    state.level = 1 + Math.floor(state.cleared / C.CELLS_PER_LEVEL);
 
-    if (state.chain > 1) toast('Chain x' + state.chain + '!');
+    if (state.flashKind === 'rows') {
+      const rows = state.pendingRows;
+      let value = 0;
+      let pureRegion = null;
 
+      rows.forEach(function (r) {
+        let v = C.SCORE_ROW;
+        if (r.region) {
+          v *= C.PURE_ROW_MULTIPLIER;
+          state.pureRows++;
+          pureRegion = r.region;
+        }
+        value += v;
+      });
+
+      const multi = C.MULTI_ROW[Math.min(rows.length, C.MULTI_ROW.length - 1)] || 1;
+      state.score += Math.round(value * multi * state.level * state.chain);
+      state.rowsCleared += rows.length;
+      state.level = 1 + Math.floor(state.rowsCleared / C.ROWS_PER_LEVEL);
+
+      if (pureRegion) {
+        toast('PURE ' + LOL.REGIONS[pureRegion].name.toUpperCase() +
+              '!  x' + C.PURE_ROW_MULTIPLIER);
+      } else if (state.chain > 1) {
+        toast('Chain x' + state.chain + '!');
+      }
+
+      state.board.removeRows(rows);
+      state.pendingRows = null;
+
+    } else {
+      state.score += state.flash.size * C.SCORE_PER_CELL * state.chain;
+      state.board.remove(state.flash);
+    }
+
+    state.board.applyGravity();
     state.flash = null;
+    state.flashKind = null;
     syncUI();
-    checkMatches();
+    stepResolve();
   }
 
   function endResolve() {
     state.flash = null;
+    state.flashKind = null;
     if (state.pendingSpawn) {
       state.piece = state.next;
       state.next = E.makePiece();
@@ -176,22 +236,8 @@
   function gameOver() {
     state.phase = 'gameover';
     state.pieceVisible = false;
-    showOverlay('Game over', 'Score ' + state.score + ' · level ' + state.level, 'Play again');
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Champion abilities                                                  */
-  /* ------------------------------------------------------------------ */
-
-  function fireChampion(x, y) {
-    if (state.phase !== 'playing') return;
-    const result = LOL.Abilities.trigger(state.board, x, y);
-    if (!result) return;
-
-    state.score += C.SCORE_ABILITY;
-    toast(result.champ.name + ' — ' + result.champ.abilityName);
-    state.pieceVisible = true;      // the falling piece keeps falling afterwards
-    beginResolve(false, result.destroy);
+    showOverlay('Game over', 'Score ' + state.score.toLocaleString() +
+                ' · level ' + state.level + ' · ' + state.rowsCleared + ' rows', 'Play again');
   }
 
   /* ------------------------------------------------------------------ */
@@ -250,20 +296,24 @@
   function syncUI() {
     el.score.textContent = state.score.toLocaleString();
     el.level.textContent = state.level;
-    el.cleared.textContent = state.cleared;
-    el.chain.textContent = state.bestChain;
+    el.rows.textContent = state.rowsCleared;
+    el.pure.textContent = state.pureRows;
 
     const champs = state.board.champions();
     if (!champs.length) {
-      el.champs.innerHTML = '<li class="champ-empty">none — click one when it lands</li>';
+      el.champs.innerHTML = '<li class="champ-empty">none on the board</li>';
     } else {
       const seen = {};
       el.champs.innerHTML = champs.map(function (c) {
         if (seen[c.key]) return '';
         seen[c.key] = true;
         const champ = LOL.CHAMPIONS[c.key];
-        return '<li><b>' + champ.name + '</b><span>' + champ.abilityName + '</span>' +
-               '<em>' + champ.desc + '</em></li>';
+        const region = LOL.REGIONS[champ.region];
+        return '<li><b>' + champ.name + '</b>' +
+               '<span>' + champ.abilityName + '</span>' +
+               '<em>' + champ.desc + '</em>' +
+               '<i class="trigger"><span class="swatch" style="background:' + region.color +
+               '"></span>fires on contact with ' + region.name + '</i></li>';
       }).join('');
     }
   }
@@ -278,7 +328,7 @@
   function toast(msg) {
     el.toast.textContent = msg;
     el.toast.classList.add('show');
-    toastTimer = 1100;
+    toastTimer = 1200;
   }
 
   function showOverlay(title, body, btn) {
@@ -307,7 +357,7 @@
 
   function onKey(e) {
     const k = e.key.toLowerCase();
-    if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', ' '].indexOf(e.key.toLowerCase()) !== -1) {
+    if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', ' '].indexOf(k) !== -1) {
       e.preventDefault();
     }
     if (k === 'p') { togglePause(); return; }
@@ -323,25 +373,6 @@
       case 'z': rotate(-1); break;
       case ' ': hardDrop(); break;
     }
-  }
-
-  function cellFromEvent(e) {
-    const rect = el.board.getBoundingClientRect();
-    const x = Math.floor(((e.clientX - rect.left) / rect.width) * C.COLS);
-    const y = Math.floor(((e.clientY - rect.top) / rect.height) * C.ROWS);
-    return { x: x, y: y };
-  }
-
-  function onBoardClick(e) {
-    const p = cellFromEvent(e);
-    if (!state.board.inside(p.x, p.y)) return;
-    fireChampion(p.x, p.y);
-  }
-
-  function onBoardMove(e) {
-    const p = cellFromEvent(e);
-    const cell = state.board.inside(p.x, p.y) ? state.board.get(p.x, p.y) : null;
-    el.board.style.cursor = (cell && cell.champ && state.phase === 'playing') ? 'pointer' : 'default';
   }
 
   const TOUCH_ACTIONS = {
@@ -362,8 +393,6 @@
     newGame();
 
     document.addEventListener('keydown', onKey);
-    el.board.addEventListener('click', onBoardClick);
-    el.board.addEventListener('mousemove', onBoardMove);
 
     el.oBtn.addEventListener('click', function () {
       if (state.phase === 'gameover') newGame();
@@ -384,7 +413,6 @@
   LOL.game = {
     get state() { return state; },
     newGame: newGame,
-    fire: fireChampion,
     move: move,
     rotate: rotate,
     hardDrop: hardDrop

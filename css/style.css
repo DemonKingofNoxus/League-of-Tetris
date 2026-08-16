@@ -194,3 +194,18 @@ kbd {
   .touch { display: flex; }
   #help { display: none; }
 }
+
+/* champion "fires on contact with X" line */
+.champ-list .trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--accent);
+}
+.champ-list .trigger .swatch { width: 10px; height: 10px; border-radius: 3px; }
+
+#help .help-rule { margin-top: 8px; color: var(--muted); }
+#help .help-rule b { color: var(--text); }

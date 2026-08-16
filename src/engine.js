@@ -32,8 +32,24 @@
   /* Piece generation                                                    */
   /* ------------------------------------------------------------------ */
 
+  let runRegion = null;
+  let runLeft = 0;
+
+  /* Champions mostly belong to the region currently falling. Picked purely at
+     random they would usually be the wrong region for the current run, sit
+     inert as dead weight, and never get to fire. */
+  function pickChampionKey() {
+    if (runRegion && Math.random() < C.CHAMPION_MATCHES_RUN) {
+      const matching = LOL.CHAMPION_KEYS.filter(function (k) {
+        return LOL.CHAMPIONS[k].region === runRegion;
+      });
+      if (matching.length) return pick(matching);
+    }
+    return pick(LOL.CHAMPION_KEYS);
+  }
+
   function makeChampionPiece() {
-    const key = pick(LOL.CHAMPION_KEYS);
+    const key = pickChampionKey();
     const champ = LOL.CHAMPIONS[key];
     return {
       kind: 'champion',
@@ -44,14 +60,32 @@
     };
   }
 
+  /* (run state is declared above makeChampionPiece so both can use it) */
+  /* Regions arrive in short runs rather than independently at random.
+     Without this a pure row is unreachable: a row is 10 cells, a piece is 4,
+     and with six regions shuffled freely you can never bank enough of one
+     region to finish a row in it. Runs are what make the pure-row bonus a
+     goal you can actually play towards. */
+  function nextPieceRegion() {
+    if (runLeft <= 0) {
+      const previous = runRegion;
+      do { runRegion = pick(LOL.REGION_KEYS); }
+      while (LOL.REGION_KEYS.length > 1 && runRegion === previous);
+      runLeft = C.REGION_RUN_MIN + randInt(C.REGION_RUN_MAX - C.REGION_RUN_MIN + 1);
+    }
+    runLeft--;
+    return runRegion;
+  }
+
+  function resetRuns() { runRegion = null; runLeft = 0; }
+
   function makeTetromino() {
     const shapeKey = pick(LOL.SHAPE_KEYS);
     const matrix = LOL.SHAPES[shapeKey].map(function (r) { return r.slice(); });
-    const primary = pick(LOL.REGION_KEYS);
+    const primary = nextPieceRegion();
 
-    /* Each filled cell takes the piece's primary region most of the time and a
-       random other region the rest, so pieces are readable but still mixed
-       enough that matching is a real decision. */
+    /* At the default bias of 1.0 a piece is a single region, like classic
+       Tetris colours. Lowering the bias mixes other regions in. */
     const cells = matrix.map(function (row) {
       return row.map(function (v) {
         if (!v) return null;
@@ -131,61 +165,36 @@
     }
   };
 
-  /* Every index that should be destroyed right now. */
-  Board.prototype.findMatches = function () {
-    const hits = new Set();
-    const self = this;
+  /* ------------------------------------------------------------------ */
+  /* Clearing — classic Tetris rows, with a bonus for single-region rows  */
+  /* ------------------------------------------------------------------ */
 
-    function runOf(coords) {
-      // coords: array of [x,y] along one line, in order
-      let start = 0;
-      while (start < coords.length) {
-        const first = self.get(coords[start][0], coords[start][1]);
-        if (!first) { start++; continue; }
-        let end = start + 1;
-        while (end < coords.length) {
-          const next = self.get(coords[end][0], coords[end][1]);
-          if (!next || next.region !== first.region) break;
-          end++;
-        }
-        if (end - start >= C.MATCH_MIN) {
-          for (let i = start; i < end; i++) {
-            const cell = self.get(coords[i][0], coords[i][1]);
-            if (cell.champ && !C.CHAMPS_CLEARED_BY_MATCH) continue;
-            hits.add(self.idx(coords[i][0], coords[i][1]));
-          }
-        }
-        start = end;
-      }
+  Board.prototype.rowIsFull = function (y) {
+    for (let x = 0; x < this.cols; x++) {
+      if (!this.grid[this.idx(x, y)]) return false;
     }
+    return true;
+  };
 
-    if (C.MATCH_HORIZONTAL) {
-      for (let y = 0; y < this.rows; y++) {
-        const line = [];
-        for (let x = 0; x < this.cols; x++) line.push([x, y]);
-        runOf(line);
-      }
+  /* The region key if every block in the row shares one, otherwise null.
+     Only meaningful for a full row. */
+  Board.prototype.rowRegion = function (y) {
+    const first = this.grid[this.idx(0, y)];
+    if (!first) return null;
+    for (let x = 1; x < this.cols; x++) {
+      const cell = this.grid[this.idx(x, y)];
+      if (!cell || cell.region !== first.region) return null;
     }
+    return first.region;
+  };
 
-    if (C.MATCH_VERTICAL) {
-      for (let x = 0; x < this.cols; x++) {
-        const line = [];
-        for (let y = 0; y < this.rows; y++) line.push([x, y]);
-        runOf(line);
-      }
+  /* Every completely filled row, top to bottom, tagged with its pure region. */
+  Board.prototype.fullRows = function () {
+    const out = [];
+    for (let y = 0; y < this.rows; y++) {
+      if (this.rowIsFull(y)) out.push({ y: y, region: this.rowRegion(y) });
     }
-
-    if (C.FULL_ROW_CLEARS) {
-      for (let y = 0; y < this.rows; y++) {
-        let full = true;
-        for (let x = 0; x < this.cols; x++) {
-          if (!this.grid[this.idx(x, y)]) { full = false; break; }
-        }
-        if (full) for (let x = 0; x < this.cols; x++) hits.add(this.idx(x, y));
-      }
-    }
-
-    return hits;
+    return out;
   };
 
   Board.prototype.remove = function (indices) {
@@ -193,7 +202,17 @@
     indices.forEach(function (i) { self.grid[i] = null; });
   };
 
-  /* Match-3 style gravity: each column compacts downward. */
+  Board.prototype.removeRows = function (rows) {
+    const self = this;
+    rows.forEach(function (r) {
+      for (let x = 0; x < self.cols; x++) self.grid[self.idx(x, r.y)] = null;
+    });
+  };
+
+  /* Match-3 style gravity: each column compacts downward. Champion abilities
+     punch holes in the middle of the stack, so blocks have to fall into them
+     rather than whole rows shifting. For a plain row clear this gives exactly
+     the same result as classic Tetris row shifting. */
   Board.prototype.applyGravity = function () {
     let moved = false;
     for (let x = 0; x < this.cols; x++) {
@@ -230,12 +249,49 @@
     return out;
   };
 
+  /* ------------------------------------------------------------------ */
+  /* Champion activation — contact with their own region                 */
+  /* ------------------------------------------------------------------ */
+
+  const ORTHOGONAL = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+  const DIAGONAL = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+
+  /* Is this champion touching a block of its own region? Another champion of
+     the same region counts — two Noxians meeting should set each other off. */
+  Board.prototype.championHasContact = function (x, y) {
+    const cell = this.get(x, y);
+    if (!cell || !cell.champ) return false;
+
+    const dirs = C.CHAMPION_CONTACT_DIAGONAL ? ORTHOGONAL.concat(DIAGONAL) : ORTHOGONAL;
+    for (let i = 0; i < dirs.length; i++) {
+      const n = this.get(x + dirs[i][0], y + dirs[i][1]);
+      if (n && n.region === cell.region) return true;
+    }
+    return false;
+  };
+
+  /* The first champion currently in contact with its own region, or null.
+     Callers fire them one at a time so each ability's fallout is resolved
+     before the next champion is considered. */
+  Board.prototype.nextTriggeredChampion = function () {
+    for (let y = 0; y < this.rows; y++) {
+      for (let x = 0; x < this.cols; x++) {
+        const cell = this.grid[this.idx(x, y)];
+        if (cell && cell.champ && this.championHasContact(x, y)) {
+          return { x: x, y: y, key: cell.champ };
+        }
+      }
+    }
+    return null;
+  };
+
   LOL.Engine = {
     Board: Board,
     makePiece: makePiece,
     makeTetromino: makeTetromino,
     makeChampionPiece: makeChampionPiece,
-    rotatePiece: rotatePiece
+    rotatePiece: rotatePiece,
+    resetRuns: resetRuns
   };
 
 })(window.LOL);

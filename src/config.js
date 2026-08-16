@@ -14,26 +14,40 @@ LOL.CONFIG = {
   ROWS: 20,
   CELL: 32,               // px per cell in the canvas backing store
 
-  /* ---------- match rules ---------- */
-  MATCH_MIN: 3,           // how many same-region cells in a line destroys them
-  MATCH_HORIZONTAL: true,
-  MATCH_VERTICAL: true,
-  FULL_ROW_CLEARS: true,  // a completely filled row always clears (safety valve)
-  CHAMPS_CLEARED_BY_MATCH: true, // champions are consumed by region matches too
+  /* ---------- clearing rules ---------- */
+  /* Classic Tetris: a completely filled row clears. If every block in that
+     row is the same region, the row is "pure" and pays PURE_ROW_MULTIPLIER
+     times as much. */
+  PURE_ROW_MULTIPLIER: 5,
 
   /* ---------- piece generation ---------- */
-  PRIMARY_REGION_BIAS: 0.62, // chance a cell takes its piece's primary region
-  CHAMPION_CHANCE: 0.14,     // chance the next piece is a 1x1 champion instead
+  /* 1.0 = every cell of a piece is the same region, like classic Tetris
+     colours. Lower it to mix regions within a piece (harder, messier). */
+  PRIMARY_REGION_BIAS: 1.0,
+  CHAMPION_CHANCE: 0.12,  // chance the next piece is a 1x1 champion instead
+  /* Consecutive pieces share a region for this many turns before the
+     generator switches. This is what makes a pure row reachable. */
+  CHAMPION_MATCHES_RUN: 0.75, // chance a champion matches the region now falling
+  REGION_RUN_MIN: 12,
+  REGION_RUN_MAX: 20,
+
+  /* ---------- champion activation ---------- */
+  /* Champions fire automatically once they touch a block of their own
+     region (up/down/left/right). No clicking. */
+  CHAMPION_CONTACT_DIAGONAL: false, // count diagonal neighbours as contact too
+  TWITCH_SHOTS: 8,        // how many random blocks Twitch destroys
 
   /* ---------- timing (ms) ---------- */
   DROP_BASE: 800,         // fall interval at level 1
   DROP_MIN: 90,           // fastest it ever gets
   LOCK_DELAY: 380,        // grace period once a piece touches down
-  FLASH_MS: 130,          // how long matched blocks glow before vanishing
+  FLASH_MS: 150,          // how long doomed blocks glow before vanishing
 
-  /* ---------- progression ---------- */
-  CELLS_PER_LEVEL: 40,    // cells cleared needed to gain a level
-  SCORE_PER_CELL: 10,
+  /* ---------- scoring ---------- */
+  ROWS_PER_LEVEL: 10,
+  SCORE_ROW: 100,                       // one cleared row
+  MULTI_ROW: [0, 1, 1.5, 2, 3],         // bonus for clearing 1-4 rows at once
+  SCORE_PER_CELL: 10,                   // blocks destroyed by an ability
   SCORE_SOFT_DROP: 1,
   SCORE_HARD_DROP: 2,
   SCORE_ABILITY: 25,
@@ -50,60 +64,66 @@ LOL.CONFIG = {
 
 /*
  * REGIONS
- * `art` is optional. If the file is absent the renderer falls back to a clean
- * flat tile in `color` with the `short` label — the game is fully playable
- * with zero art.
+ * `color` is the tile background — deliberately muted rather than fully
+ * saturated, so six of them on screen at once stay easy on the eyes and the
+ * gold crest keeps its contrast.
+ * `art` is optional: if the file is missing the renderer falls back to a flat
+ * tile with the `short` label, and the game still plays.
  */
 LOL.REGIONS = {
-  demacia:    { name: 'Demacia',    short: 'DE', color: '#d8b45a', art: 'assets/regions/demacia.svg' },
-  noxus:      { name: 'Noxus',      short: 'NO', color: '#bf3b34', art: 'assets/regions/noxus.svg' },
-  ionia:      { name: 'Ionia',      short: 'IO', color: '#d97ab8', art: 'assets/regions/ionia.svg' },
-  freljord:   { name: 'Freljord',   short: 'FR', color: '#5fb6dd', art: 'assets/regions/freljord.svg' },
-  zaun:       { name: 'Zaun',       short: 'ZA', color: '#6cc24a', art: 'assets/regions/zaun.svg' },
-  bilgewater: { name: 'Bilgewater', short: 'BI', color: '#d4772c', art: 'assets/regions/bilgewater.svg' }
+  noxus:    { name: 'Noxus',    short: 'NO', color: '#a8474a', art: 'assets/regions/noxus.png' },
+  void:     { name: 'Void',     short: 'VO', color: '#8a63ad', art: 'assets/regions/void.png' },
+  freljord: { name: 'Freljord', short: 'FR', color: '#5b90bd', art: 'assets/regions/freljord.png' },
+  zaun:     { name: 'Zaun',     short: 'ZA', color: '#67a15c', art: 'assets/regions/zaun.png' },
+  ionia:    { name: 'Ionia',    short: 'IO', color: '#c47ba0', art: 'assets/regions/ionia.png' },
+  shurima:  { name: 'Shurima',  short: 'SH', color: '#9a7830', art: 'assets/regions/shurima.png' }
 };
+
+/* The gold used for region crests. Kept here so the art pipeline and the
+   fallback rendering agree on one value. */
+LOL.GOLD = '#f2dfa8';
 
 /*
  * CHAMPIONS
- * Every champion belongs to a region (so it also counts as that region for
- * matching) and names one ability from src/abilities.js.
+ * A champion belongs to a region and fires automatically the moment it
+ * touches a block of that region.
  */
 LOL.CHAMPIONS = {
+  sivir: {
+    name: 'Sivir', region: 'shurima', ability: 'region_nuke',
+    abilityName: 'Boomerang Blade',
+    desc: 'Destroys every Shurima block on the board.',
+    art: 'assets/champions/sivir.png'
+  },
+  twitch: {
+    name: 'Twitch', region: 'zaun', ability: 'random_shots',
+    abilityName: 'Spray and Pray',
+    desc: 'Shoots ' + LOL.CONFIG.TWITCH_SHOTS + ' random blocks anywhere on the board.',
+    art: 'assets/champions/twitch.png'
+  },
   darius: {
     name: 'Darius', region: 'noxus', ability: 'column_below',
     abilityName: 'Noxian Guillotine',
-    desc: 'Destroys every block in the column directly below him.',
-    art: 'assets/champions/darius.svg'
+    desc: 'Executes every block in a straight line below him.',
+    art: 'assets/champions/darius.png'
   },
-  lux: {
-    name: 'Lux', region: 'demacia', ability: 'full_row',
-    abilityName: 'Final Spark',
-    desc: 'Destroys every block in her row.',
-    art: 'assets/champions/lux.svg'
+  ahri: {
+    name: 'Ahri', region: 'ionia', ability: 'full_row',
+    abilityName: 'Orb of Deception',
+    desc: 'Destroys her entire row horizontally.',
+    art: 'assets/champions/ahri.png'
   },
-  ziggs: {
-    name: 'Ziggs', region: 'zaun', ability: 'blast_3x3',
-    abilityName: 'Mega Inferno Bomb',
-    desc: 'Destroys everything in a 3×3 area around him.',
-    art: 'assets/champions/ziggs.svg'
+  kaisa: {
+    name: "Kai'Sa", region: 'void', ability: 'blast_3x3',
+    abilityName: 'Icathian Rain',
+    desc: 'Missiles the 3×3 area surrounding her.',
+    art: 'assets/champions/kaisa.png'
   },
-  ashe: {
-    name: 'Ashe', region: 'freljord', ability: 'convert_neighbours',
-    abilityName: 'Frost Shot',
-    desc: 'Converts all 8 neighbouring blocks to Freljord.',
-    art: 'assets/champions/ashe.svg'
-  },
-  yasuo: {
-    name: 'Yasuo', region: 'ionia', ability: 'side_columns',
-    abilityName: 'Steel Tempest',
-    desc: 'Destroys the columns to his left and right, below him.',
-    art: 'assets/champions/yasuo.svg'
-  },
-  missFortune: {
-    name: 'Miss Fortune', region: 'bilgewater', ability: 'region_nuke',
-    abilityName: 'Double Up',
-    desc: 'Destroys every block on the board sharing the region beneath her.',
-    art: 'assets/champions/miss-fortune.svg'
+  sejuani: {
+    name: 'Sejuani', region: 'freljord', ability: 'board_wipe',
+    abilityName: 'Glacial Prison',
+    desc: 'Her bola shatters every block on the board.',
+    art: 'assets/champions/sejuani.png'
   }
 };
 
