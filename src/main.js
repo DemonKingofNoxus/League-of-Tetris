@@ -6,6 +6,7 @@
 
   const C = LOL.CONFIG;
   const E = LOL.Engine;
+  const T = LOL.Tuning;
 
   const el = {};
   ['board', 'next', 'ui-score', 'ui-level', 'ui-rows', 'ui-pure', 'ui-progress',
@@ -63,6 +64,9 @@
     }
     if (!promoted) return;
 
+    /* Any per-level rate overrides take effect from here on. */
+    T.setLevel(state.level);
+
     const before = state.regions.length;
     expandRegions();
     const added = state.regions.slice(before);
@@ -77,6 +81,7 @@
   /* ------------------------------------------------------------------ */
 
   function newGame() {
+    T.setLevel(1);
     E.resetGenerator();
 
     const pool = LOL.REGION_KEYS.slice();
@@ -558,7 +563,8 @@
     rotate: rotate,
     hardDrop: hardDrop,
     targetFor: targetFor,
-    regionsForLevel: regionsForLevel
+    regionsForLevel: regionsForLevel,
+    tuning: T
   };
 
   /* Art is optional, so boot regardless of whether it loads. */

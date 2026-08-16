@@ -111,9 +111,23 @@
       return { destroy: destroy };
     },
 
-    /* Sejuani — Glacial Prison: the entire board. */
-    board_wipe: function (board) {
-      return { destroy: collect(board, function () { return true; }) };
+    /* Sejuani — Glacial Prison: a random 3x3 patch. The top-left is drawn so
+       the full 3x3 always fits on the board rather than being clipped at an
+       edge, which would quietly make edge hits weaker than centre hits. */
+    random_blast: function (board) {
+      const hits = {};
+      const count = C.SEJUANI_BLASTS;
+      for (let n = 0; n < count; n++) {
+        const ox = Math.floor(Math.random() * Math.max(1, board.cols - 2));
+        const oy = Math.floor(Math.random() * Math.max(1, board.rows - 2));
+        for (let dy = 0; dy < 3; dy++) {
+          for (let dx = 0; dx < 3; dx++) {
+            const xx = ox + dx, yy = oy + dy;
+            if (board.inside(xx, yy) && board.get(xx, yy)) hits[board.idx(xx, yy)] = true;
+          }
+        }
+      }
+      return { destroy: Object.keys(hits).map(Number) };
     },
 
     /* Pyke — Death from Below: an X through both diagonals, full length. */
@@ -147,16 +161,14 @@
       return { destroy: Object.keys(hits).map(Number) };
     },
 
-    /* Qiyana — Supreme Display of Talent: a hollow O, the ring only. */
-    ring: function (board, x, y) {
-      const r = C.QIYANA_RING;
-      const inner = (r - 1) * (r - 1);
-      const outer = (r + 0.5) * (r + 0.5);
+    /* Qiyana — Supreme Display of Talent: the whole border of the playfield.
+       Not a ring around her: the outermost column on each side and the top and
+       bottom row, wherever she happens to be standing. */
+    board_edge: function (board) {
       return {
         destroy: collect(board, function (xx, yy) {
-          const dx = xx - x, dy = yy - y;
-          const d2 = dx * dx + dy * dy;
-          return d2 > inner && d2 <= outer;
+          return xx === 0 || xx === board.cols - 1 ||
+                 yy === 0 || yy === board.rows - 1;
         })
       };
     },

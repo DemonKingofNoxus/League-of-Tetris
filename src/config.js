@@ -25,12 +25,12 @@ LOL.CONFIG = {
      visibly mixed while still letting you bank enough of one region to finish
      a pure row. Raising FEATURED_SHARE towards 1.0 gives long single-region
      streaks; lowering it towards 1/regions makes pure rows near-impossible. */
-  FEATURED_SHARE: 0.70,
+  FEATURED_SHARE: 0.45,
   FEATURE_ROTATE_MIN: 8,  // pieces before the featured region changes
   FEATURE_ROTATE_MAX: 14,
 
-  CHAMPION_CHANCE: 0.20,      // chance the next piece is a 1x1 champion
-  CHAMPION_MATCHES_FEATURE: 0.6, // how often that champion suits the featured region
+  CHAMPION_CHANCE: 0.30,          // chance the next piece is a 1x1 champion
+  CHAMPION_MATCHES_FEATURE: 0.50, // how often that champion suits the featured region
 
   /* ---------- champion activation ---------- */
   /* Champions fire automatically once they touch a block of their own
@@ -42,7 +42,7 @@ LOL.CONFIG = {
   TEEMO_SHROOMS: 3,       // Teemo: 2x2 blasts
   KAYLE_RADIUS: 2.6,      // Kayle: circle radius in cells
   GWEN_CONE_DEPTH: 5,     // Gwen: how far the cone reaches
-  QIYANA_RING: 3,         // Qiyana: radius of the hollow O
+  SEJUANI_BLASTS: 1,      // Sejuani: how many random 3x3 areas
   AURELION_BONUS: 2000,   // Aurelion Sol: flat bonus on top of the wipe
 
   /* ---------- levels ----------
@@ -55,6 +55,28 @@ LOL.CONFIG = {
     2000, 6000, 13000, 24000, 40000,
     62000, 92000, 132000, 184000, 250000
   ],
+
+  /* ---------- per-level tuning ----------
+     Override any CONFIG key above, per level. Entries CASCADE: a value set at
+     level 3 stays in force for 4, 5, 6... until a later level overrides that
+     same key. Write only the levels where something actually changes.
+
+     Everything here is optional — delete the whole table and the base values
+     above are used at every level. */
+  LEVEL_TUNING: {
+    // 1: { CHAMPION_CHANCE: 0.30, FEATURED_SHARE: 0.45 },
+    // 4: { CHAMPION_CHANCE: 0.26 },   // champions thin out as the pool grows
+    // 8: { FEATURED_SHARE: 0.38, CHAMPION_MATCHES_FEATURE: 0.40 },
+  },
+
+  /* Per-champion spawn weight, per level. Same cascade. Weights are relative
+     to the other champions in play, not percentages — weight 2 is twice as
+     likely as weight 1, and weight 0 means that champion never spawns.
+     The starting weight for each champion is its `weight` in LOL.CHAMPIONS. */
+  LEVEL_CHAMPION_WEIGHTS: {
+    // 1: { sejuani: 0.5, aurelionSol: 0 },  // hold the big ones back early
+    // 6: { aurelionSol: 1 },                // let Aurelion Sol in from level 6
+  },
 
   /* ---------- timing (ms) ---------- */
   DROP_BASE: 850,         // fall interval at level 1
@@ -108,84 +130,103 @@ LOL.REGIONS = {
 /*
  * CHAMPIONS — one per region. A champion fires the moment it touches a block
  * of its own region; otherwise it settles and stays put like any other block.
+ *
+ * `weight` is that champion's spawn rate relative to the other champions in
+ * play — 2 is twice as likely as 1, and 0 means it never spawns. It is a
+ * weight rather than a percentage so you can change one champion without
+ * having to rebalance the other twelve to keep the total at 100.
+ * LEVEL_CHAMPION_WEIGHTS above can override any of these per level.
  */
 LOL.CHAMPIONS = {
   darius: {
     name: 'Darius', region: 'noxus', ability: 'column_below',
     abilityName: 'Noxian Guillotine',
     desc: 'Executes every block in a straight line below him.',
+    weight: 1,
     art: 'assets/champions/darius.png'
   },
   kayle: {
     name: 'Kayle', region: 'demacia', ability: 'circle',
     abilityName: 'Divine Judgment',
     desc: 'Destroys everything in a circle around her.',
+    weight: 1,
     art: 'assets/champions/kayle.png'
   },
   gwen: {
     name: 'Gwen', region: 'shadowIsles', ability: 'cone',
     abilityName: 'Snip Snip!',
     desc: 'Destroys blocks in a widening cone below her.',
+    weight: 1,
     art: 'assets/champions/gwen.png'
   },
   ahri: {
     name: 'Ahri', region: 'ionia', ability: 'full_row',
     abilityName: 'Orb of Deception',
     desc: 'Her spirit ball destroys one row horizontally.',
+    weight: 1,
     art: 'assets/champions/ahri.png'
   },
   sivir: {
     name: 'Sivir', region: 'shurima', ability: 'region_nuke',
     abilityName: 'Boomerang Blade',
     desc: 'Kills every block of her own region on the board.',
+    weight: 1,
     art: 'assets/champions/sivir.png'
   },
   twitch: {
     name: 'Twitch', region: 'zaun', ability: 'random_shots',
     abilityName: 'Spray and Pray',
     desc: 'Shoots 5 random blocks of any region.',
+    weight: 1,
     art: 'assets/champions/twitch.png'
   },
   kaisa: {
     name: "Kai'Sa", region: 'void', ability: 'blast_3x3',
     abilityName: 'Icathian Rain',
     desc: 'Missiles the 3×3 area surrounding her.',
+    weight: 1,
     art: 'assets/champions/kaisa.png'
   },
   sejuani: {
-    name: 'Sejuani', region: 'freljord', ability: 'board_wipe',
+    name: 'Sejuani', region: 'freljord', ability: 'random_blast',
     abilityName: 'Glacial Prison',
-    desc: 'Her bola shatters every block on the board.',
+    desc: 'Her bola shatters a random 3×3 area of the board.',
+    weight: 1,
     art: 'assets/champions/sejuani.png'
   },
   pyke: {
     name: 'Pyke', region: 'bilgewater', ability: 'cross_x',
     abilityName: 'Death from Below',
     desc: 'Executes blocks in an X through both diagonals.',
+    weight: 1,
     art: 'assets/champions/pyke.png'
   },
   teemo: {
     name: 'Teemo', region: 'bandleCity', ability: 'shrooms',
     abilityName: 'Noxious Trap',
     desc: 'Throws 3 shrooms that each blow up a 2×2.',
+    weight: 1,
     art: 'assets/champions/teemo.png'
   },
   qiyana: {
-    name: 'Qiyana', region: 'ixtal', ability: 'ring',
+    name: 'Qiyana', region: 'ixtal', ability: 'board_edge',
     abilityName: 'Supreme Display of Talent',
-    desc: 'Destroys a hollow O of blocks around her.',
+    desc: 'Destroys every block along the edge of the field.',
+    weight: 1,
     art: 'assets/champions/qiyana.png'
   },
   aurelionSol: {
     name: 'Aurelion Sol', region: 'targon', ability: 'supernova',
     abilityName: 'Falling Star',
     desc: 'Destroys the whole board and pays a large bonus.',
+    weight: 1,
     art: 'assets/champions/aurelionSol.png'
   },
   caitlyn: {
     name: 'Caitlyn', region: 'piltover', ability: 'detonate_champions',
     abilityName: 'Ace in the Hole',
     desc: 'Destroys every champion block and sets off their abilities.',
+    weight: 1,
     art: 'assets/champions/caitlyn.png'
   }
 };

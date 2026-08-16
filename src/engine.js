@@ -11,6 +11,7 @@
   'use strict';
 
   const C = LOL.CONFIG;
+  const T = LOL.Tuning;   // level-aware view of the CONFIG numbers
 
   function randInt(n) { return Math.floor(Math.random() * n); }
   function pick(arr) { return arr[randInt(arr.length)]; }
@@ -58,8 +59,9 @@
     } else {
       featured = active[0];
     }
-    featureLeft = C.FEATURE_ROTATE_MIN +
-      randInt(Math.max(1, C.FEATURE_ROTATE_MAX - C.FEATURE_ROTATE_MIN + 1));
+    const lo = T.value('FEATURE_ROTATE_MIN');
+    const hi = T.value('FEATURE_ROTATE_MAX');
+    featureLeft = lo + randInt(Math.max(1, hi - lo + 1));
   }
 
   function getFeatured() {
@@ -71,7 +73,7 @@
     if (featureLeft <= 0) rotateFeature();
     featureLeft--;
 
-    if (Math.random() < C.FEATURED_SHARE) return featured;
+    if (Math.random() < T.value('FEATURED_SHARE')) return featured;
 
     /* Anything except the featured region, so the mix stays visible. */
     const others = active.filter(function (k) { return k !== featured; });
@@ -82,23 +84,43 @@
 
   /* Champions only exist for regions in play, and mostly match the region
      currently falling — otherwise they land nowhere near their own colour and
-     sit as dead weight for the rest of the game. */
-  function pickChampionKey() {
-    const available = active
+     sit as dead weight for the rest of the game. Within that, each champion's
+     own weight decides how often it is the one that shows up. */
+  function weightedPick(keys) {
+    let total = 0;
+    for (let i = 0; i < keys.length; i++) total += T.championWeight(keys[i]);
+    if (total <= 0) return null;          // every champion in play is disabled
+
+    let roll = Math.random() * total;
+    for (let i = 0; i < keys.length; i++) {
+      roll -= T.championWeight(keys[i]);
+      if (roll < 0) return keys[i];
+    }
+    return keys[keys.length - 1];         // floating point safety net
+  }
+
+  function championsInPlay() {
+    return active
       .map(function (r) { return LOL.CHAMPION_BY_REGION[r]; })
       .filter(Boolean);
+  }
+
+  function pickChampionKey() {
+    const available = championsInPlay();
     if (!available.length) return null;
 
-    if (Math.random() < C.CHAMPION_MATCHES_FEATURE) {
+    if (Math.random() < T.value('CHAMPION_MATCHES_FEATURE')) {
       const match = LOL.CHAMPION_BY_REGION[getFeatured()];
-      if (match) return match;
+      /* A champion on weight 0 is switched off, so it must not be forced in
+         through the featured-region shortcut either. */
+      if (match && T.championWeight(match) > 0) return match;
     }
-    return pick(available);
+    return weightedPick(available);
   }
 
   function makeChampionPiece() {
     const key = pickChampionKey();
-    if (!key) return makeTetromino();
+    if (!key) return makeTetromino();   // nothing eligible: fall back to a shape
     const champ = LOL.CHAMPIONS[key];
     return {
       kind: 'champion',
@@ -131,7 +153,7 @@
   }
 
   function makePiece() {
-    return Math.random() < C.CHAMPION_CHANCE ? makeChampionPiece() : makeTetromino();
+    return Math.random() < T.value('CHAMPION_CHANCE') ? makeChampionPiece() : makeTetromino();
   }
 
   function rotatePiece(piece, dir) {
@@ -317,6 +339,7 @@
     rotatePiece: rotatePiece,
     setActiveRegions: setActiveRegions,
     getActiveRegions: getActiveRegions,
+    championsInPlay: championsInPlay,
     getFeatured: getFeatured,
     resetGenerator: resetGenerator
   };

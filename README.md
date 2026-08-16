@@ -109,10 +109,10 @@ On phones an on-screen button row appears automatically.
 | Sivir | Shurima | Boomerang Blade | Every Shurima block on the board |
 | Twitch | Zaun | Spray and Pray | 5 random blocks, any region |
 | Kai'Sa | Void | Icathian Rain | The 3×3 around her |
-| Sejuani | Freljord | Glacial Prison | Every block on the board |
+| Sejuani | Freljord | Glacial Prison | A random 3×3 area of the board |
 | Pyke | Bilgewater | Death from Below | An X through both diagonals |
 | Teemo | Bandle City | Noxious Trap | 3 shrooms, each a 2×2 blast |
-| Qiyana | Ixtal | Supreme Display of Talent | A hollow O — the middle survives |
+| Qiyana | Ixtal | Supreme Display of Talent | Every block along the **edge of the field** |
 | Aurelion Sol | Targon | Falling Star | The whole board, plus a big bonus |
 | Caitlyn | Piltover | Ace in the Hole | Destroys every champion block **and sets off their abilities** |
 
@@ -132,7 +132,8 @@ clears them** — that is deliberate until there is an account system.
 ```
 index.html          markup + panel layout
 css/style.css       all styling
-src/config.js       ← REGIONS, CHAMPIONS, tuning numbers. Edit this one.
+src/config.js       ← REGIONS, CHAMPIONS, rates, per-level tables. Edit this one.
+src/tuning.js       resolves "what is this number at level N?"
 src/assets.js       image loading, with fallback when art is missing
 src/engine.js       pure rules: board, pieces, rows, gravity, contact triggers
 src/abilities.js    the thirteen champion effects
@@ -141,6 +142,7 @@ src/main.js         game loop, input, UI
 test/engine.test.js headless rule tests
 tools/process-art.py  turns assets/source/ into game-ready tiles
 tools/balance.js    simulates a good player to check the game is survivable
+tools/rates.js      prints the effective probabilities, level by level
 assets/source/      your original art, untouched
 assets/regions/     generated 128px region tiles
 assets/champions/   generated 128px champion portraits
@@ -167,17 +169,61 @@ See **[ASSETS.md](ASSETS.md)** for the details.
 Everything worth tweaking is at the top of `src/config.js`:
 
 ```js
-COLS: 12,                     // board width
-PURE_ROW_MULTIPLIER: 5,       // what a single-region row pays
-FEATURED_SHARE: 0.70,         // share of pieces using the featured region
-FEATURE_ROTATE_MIN/MAX: 8/14, // pieces before the feature changes
-CHAMPION_CHANCE: 0.20,        // how often a champion piece spawns
-CHAMPION_MATCHES_FEATURE: 0.6,
+COLS: 12,                       // board width
+PURE_ROW_MULTIPLIER: 5,         // what a single-region row pays
+FEATURED_SHARE: 0.45,           // share of pieces using the featured region
+FEATURE_ROTATE_MIN/MAX: 8/14,   // pieces before the feature changes
+CHAMPION_CHANCE: 0.30,          // how often a champion piece spawns
+CHAMPION_MATCHES_FEATURE: 0.50, // how often that champion suits the feature
 CHAMPION_CONTACT_DIAGONAL: false,
-LEVEL_REGIONS_START: 3,       // regions at level 1
-LEVEL_TARGETS: [...],         // score gates per level
-DROP_BASE: 850,               // fall speed at level 1
+LEVEL_REGIONS_START: 3,         // regions at level 1
+LEVEL_TARGETS: [...],           // score gates per level
+DROP_BASE: 850,                 // fall speed at level 1
 ```
+
+### Per-champion spawn rate
+
+Every champion in `LOL.CHAMPIONS` has a `weight`:
+
+```js
+sejuani: { name: 'Sejuani', region: 'freljord', ..., weight: 1 },
+```
+
+It is **relative, not a percentage** — weight 2 is twice as likely as weight 1
+among the champions currently in play, and **weight 0 means it never spawns**.
+Weights rather than percentages so you can change one champion without having
+to rebalance the other twelve to keep a total of 100.
+
+### Per-level overrides
+
+Two tables in `config.js` override any of the above, per level. Entries
+**cascade**: a value set at level 3 stays in force at 4, 5, 6… until a later
+level changes that same key, so you only write the levels where something
+actually changes.
+
+```js
+LEVEL_TUNING: {
+  1: { CHAMPION_CHANCE: 0.30, FEATURED_SHARE: 0.45 },
+  4: { CHAMPION_CHANCE: 0.26 },                        // levels 4-7
+  8: { FEATURED_SHARE: 0.38, CHAMPION_MATCHES_FEATURE: 0.40 },
+},
+
+LEVEL_CHAMPION_WEIGHTS: {
+  1: { sejuani: 0.5, aurelionSol: 0 },  // hold the big ones back early
+  6: { aurelionSol: 1 },                // let Aurelion Sol in from level 6
+},
+```
+
+Both ship empty, so the base values apply at every level until you fill them
+in. To see the result:
+
+```bash
+npm run rates       # every level
+node tools/rates.js 7   # just level 7
+```
+
+That prints the real numbers through the same tuning layer the game uses,
+including what each champion's weight works out to as a share of all pieces.
 
 Adding a champion is two edits: an entry in `LOL.CHAMPIONS` (config.js) and one
 function in `abilities.js`. Nothing else needs to know about it.
@@ -185,8 +231,9 @@ function in `abilities.js`. Nothing else needs to know about it.
 ## Tests
 
 ```bash
-node test/engine.test.js    # rules: rows, purity, contact triggers, all six abilities, 400-piece soak
-node tools/balance.js       # is the game survivable, and are pure rows reachable?
+npm test            # rules, all 13 abilities, the tuning layer, a 500-piece soak
+npm run balance     # is the game survivable, and are pure rows reachable?
+npm run rates       # the effective probabilities at every level
 ```
 
 Current numbers from `tools/balance.js`, using a simulated player:

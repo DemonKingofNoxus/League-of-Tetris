@@ -2,12 +2,14 @@
 global.window = global; // browser scripts assign window.LOL and then read bare LOL
 const path = require('path');
 require(path.join(__dirname, '../src/config.js'));
+require(path.join(__dirname, '../src/tuning.js'));
 require(path.join(__dirname, '../src/engine.js'));
 require(path.join(__dirname, '../src/abilities.js'));
 
 const LOL = global.window.LOL;
 const E = LOL.Engine;
 const C = LOL.CONFIG;
+const T = LOL.Tuning;
 let fails = 0;
 function check(name, cond) {
   console.log((cond ? '  ok   ' : '  FAIL ') + name);
@@ -126,9 +128,25 @@ b = new E.Board(); fillArea(b); b.set(5, 15, { region: 'void', champ: 'kaisa' })
 r = LOL.Abilities.trigger(b, 5, 15);
 check("Kai'Sa hits the 3x3 around her", r.destroy.length === 9);
 
-b = new E.Board(); fillArea(b); b.set(5, 15, { region: 'freljord', champ: 'sejuani' });
+/* Sejuani: one random 3x3, always a full 3x3 rather than a clipped edge. */
+b = new E.Board(); fillArea(b, 'ionia', 0); b.set(5, 15, { region: 'freljord', champ: 'sejuani' });
 r = LOL.Abilities.trigger(b, 5, 15);
-check('Sejuani wipes the whole board', r.destroy.length === COLS * (ROWS - 10));
+check('Sejuani destroys a 3x3 patch, plus herself',
+  r.destroy.length >= 9 && r.destroy.length <= 9 * C.SEJUANI_BLASTS + 1);
+let sejShapeOk = true;
+for (let n = 0; n < 200; n++) {
+  const bb = new E.Board();
+  fillArea(bb, 'ionia', 0);
+  bb.set(5, 15, { region: 'freljord', champ: 'sejuani' });
+  const out = LOL.Abilities.trigger(bb, 5, 15);
+  const pts = out.destroy.filter(function (i) { return i !== bb.idx(5, 15); })
+                         .map(function (i) { return [i % COLS, Math.floor(i / COLS)]; });
+  const xs = pts.map(function (p) { return p[0]; });
+  const ys = pts.map(function (p) { return p[1]; });
+  if (Math.max.apply(null, xs) - Math.min.apply(null, xs) > 2) sejShapeOk = false;
+  if (Math.max.apply(null, ys) - Math.min.apply(null, ys) > 2) sejShapeOk = false;
+}
+check('Sejuani never exceeds a 3x3 footprint over 200 casts', sejShapeOk);
 
 b = new E.Board(); fillArea(b); b.set(5, 15, { region: 'targon', champ: 'aurelionSol' });
 r = LOL.Abilities.trigger(b, 5, 15);
@@ -165,13 +183,28 @@ check('Pyke only hits the two diagonals', coords.every(function (p) {
 }));
 check('Pyke reaches all four arms', coords.length > 12);
 
-/* Qiyana: a hollow ring — the centre survives. */
+/* Qiyana: the border of the playfield, wherever she stands. */
 b = new E.Board(); fillArea(b, 'ionia', 0); b.set(6, 10, { region: 'ixtal', champ: 'qiyana' });
 r = LOL.Abilities.trigger(b, 6, 10);
 let hit = new Set(r.destroy);
-check('Qiyana leaves the inside of the O intact',
-  !hit.has(b.idx(6, 9)) && !hit.has(b.idx(7, 10)) && !hit.has(b.idx(5, 10)));
-check('Qiyana destroys the ring itself', hit.has(b.idx(6, 7)) && hit.has(b.idx(6, 13)));
+let edgeOnly = true, edgeAll = true;
+for (let y = 0; y < ROWS; y++) {
+  for (let x = 0; x < COLS; x++) {
+    const isEdge = x === 0 || x === COLS - 1 || y === 0 || y === ROWS - 1;
+    const isSelf = x === 6 && y === 10;
+    if (hit.has(b.idx(x, y)) && !isEdge && !isSelf) edgeOnly = false;
+    if (isEdge && !hit.has(b.idx(x, y))) edgeAll = false;
+  }
+}
+check('Qiyana destroys nothing off the border', edgeOnly);
+check('Qiyana destroys the whole border', edgeAll);
+check('Qiyana leaves the middle of the field alone', !hit.has(b.idx(6, 9)));
+
+/* She hits the same border from anywhere, including standing on it. */
+b = new E.Board(); fillArea(b, 'ionia', 0); b.set(0, 0, { region: 'ixtal', champ: 'qiyana' });
+r = LOL.Abilities.trigger(b, 0, 0);
+check('Qiyana from a corner still clears the whole border',
+  r.destroy.length === 2 * COLS + 2 * (ROWS - 2));
 
 /* Teemo: at most 3 shrooms x 4 cells. */
 b = new E.Board(); fillArea(b, 'ionia', 0); b.set(5, 5, { region: 'bandleCity', champ: 'teemo' });
@@ -353,6 +386,100 @@ check("champion piece carries its champion's region",
 check('board is ' + C.COLS + ' wide', new E.Board().cols === C.COLS && C.COLS >= 12);
 check('piece collides with the floor',
   new E.Board().collides(cp, 0, C.ROWS) && !new E.Board().collides(cp, 0, C.ROWS - 1));
+
+/* ------------------------------------------------------------------ */
+section('per-level tuning and champion weights');
+
+const savedTuning = C.LEVEL_TUNING;
+const savedWeights = C.LEVEL_CHAMPION_WEIGHTS;
+
+C.LEVEL_TUNING = {
+  1: { CHAMPION_CHANCE: 0.30, FEATURED_SHARE: 0.45 },
+  4: { CHAMPION_CHANCE: 0.10 },
+  8: { FEATURED_SHARE: 0.90 }
+};
+
+T.setLevel(1);
+check('level 1 reads its own override', T.value('CHAMPION_CHANCE') === 0.30);
+T.setLevel(3);
+check('an override holds until a later level changes it', T.value('CHAMPION_CHANCE') === 0.30);
+T.setLevel(4);
+check('a later level overrides it', T.value('CHAMPION_CHANCE') === 0.10);
+T.setLevel(9);
+check('overrides cascade independently per key',
+  T.value('CHAMPION_CHANCE') === 0.10 && T.value('FEATURED_SHARE') === 0.90);
+check('an untouched key falls through to CONFIG',
+  T.value('TWITCH_SHOTS') === C.TWITCH_SHOTS);
+
+C.LEVEL_TUNING = {};
+T.setLevel(5);
+check('with no tuning table at all, CONFIG is used',
+  T.value('CHAMPION_CHANCE') === C.CHAMPION_CHANCE);
+
+/* --- champion weights --- */
+C.LEVEL_CHAMPION_WEIGHTS = {
+  1: { sejuani: 0, darius: 3 },
+  5: { sejuani: 2 }
+};
+
+T.setLevel(1);
+check('a weight of 0 is reported as 0', T.championWeight('sejuani') === 0);
+check('a raised weight is reported', T.championWeight('darius') === 3);
+check('an unlisted champion keeps its configured weight',
+  T.championWeight('ahri') === (LOL.CHAMPIONS.ahri.weight === undefined ? 1 : LOL.CHAMPIONS.ahri.weight));
+T.setLevel(5);
+check('weights cascade like other overrides', T.championWeight('sejuani') === 2);
+
+const shares = T.championShares(['darius', 'ahri', 'sejuani']);
+check('shares sum to 1',
+  Math.abs(shares.darius + shares.ahri + shares.sejuani - 1) < 1e-9);
+check('a weight of 3 gets three times the share of a weight of 1',
+  Math.abs(shares.darius / shares.ahri - 3) < 1e-9);
+
+/* A champion on weight 0 must never spawn — including via the
+   featured-region shortcut, which bypasses the weighted draw. */
+T.setLevel(1);                                   // sejuani weight 0 here
+E.setActiveRegions(['freljord', 'noxus', 'ionia']);
+let sawSejuani = false;
+for (let i = 0; i < 3000; i++) {
+  const piece = E.makeChampionPiece();
+  const c = piece.cells[0][0];
+  if (c && c.champ === 'sejuani') sawSejuani = true;
+}
+check('a champion on weight 0 never spawns, even as the featured region',
+  !sawSejuani);
+
+/* And the relative weights actually show up in the draw. */
+C.LEVEL_CHAMPION_WEIGHTS = { 1: { darius: 9, ahri: 1 } };
+T.setLevel(1);
+C.LEVEL_TUNING = { 1: { CHAMPION_MATCHES_FEATURE: 0 } };  // isolate the weighted draw
+T.setLevel(1);
+E.setActiveRegions(['noxus', 'ionia']);
+let dariusCount = 0, ahriCount = 0;
+for (let i = 0; i < 4000; i++) {
+  const c = E.makeChampionPiece().cells[0][0];
+  if (c.champ === 'darius') dariusCount++;
+  if (c.champ === 'ahri') ahriCount++;
+}
+const ratio = dariusCount / Math.max(1, ahriCount);
+check('a 9:1 weighting produces roughly a 9:1 draw (got ' + ratio.toFixed(1) + ':1)',
+  ratio > 6.5 && ratio < 13);
+
+/* Everything switched off falls back to ordinary pieces rather than hanging. */
+C.LEVEL_CHAMPION_WEIGHTS = { 1: { darius: 0, ahri: 0 } };
+T.setLevel(1);
+let anyChampion = false;
+for (let i = 0; i < 500; i++) {
+  const piece = E.makeChampionPiece();
+  if (piece.cells[0][0] && piece.cells[0][0].champ) anyChampion = true;
+}
+check('with every champion in play at weight 0, a tetromino is produced instead',
+  !anyChampion);
+
+C.LEVEL_TUNING = savedTuning;
+C.LEVEL_CHAMPION_WEIGHTS = savedWeights;
+T.setLevel(1);
+E.setActiveRegions(LOL.REGION_KEYS);
 
 /* ------------------------------------------------------------------ */
 section('full resolve soak');
