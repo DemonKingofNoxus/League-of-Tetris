@@ -86,7 +86,7 @@ server.on('error', function (err) {
 });
 
 server.listen(requested, function () {
-  console.log('\n  Runeterra Blocks is running.');
+  console.log('\n  League of Tetris is running.');
   console.log('\n      http://localhost:' + requested + '\n');
   console.log('  Serving ' + ROOT);
   console.log('  Press Ctrl+C to stop.\n');

@@ -1,5 +1,5 @@
 {
-  "name": "runeterra-blocks",
+  "name": "league-of-tetris",
   "version": "0.1.0",
   "private": true,
   "description": "Tetris where every block belongs to a region, single-region rows pay 5x, and champion blocks fire on contact with their own region.",
