@@ -11,45 +11,50 @@ Pure HTML/CSS/JavaScript. No build step, no frameworks, no dependencies.
 
 ## Run it on localhost
 
-You need a tiny web server. Opening `index.html` by double-clicking works too,
-but a server is closer to how it will really be hosted, and some browsers
-restrict local files.
-
-**Option A — Python (already installed on Mac/Linux, and on Windows if you
-ticked "Add Python to PATH"):**
-
-```bash
-cd path/to/gamte_test
-python3 -m http.server 8000
-```
-On Windows use `python -m http.server 8000`.
-
-Then open **<http://localhost:8000>** in your browser. Stop the server with
-<kbd>Ctrl</kbd>+<kbd>C</kbd>.
-
-**Option B — Node:**
-
-```bash
-cd path/to/gamte_test
-npx serve .
-```
-It prints the URL to open (usually <http://localhost:3000>).
-
-**Option C — VS Code:** install the *Live Server* extension, right-click
-`index.html`, "Open with Live Server". It auto-reloads when you edit a file.
-
-**Option D — no server at all:** double-click `index.html`. The game is written
-as classic scripts (not ES modules) specifically so this works.
-
-To get the code on your machine:
+**You need [Node.js](https://nodejs.org) — nothing else.** No Python, and no
+`npm install`: the server uses only Node's built-in modules.
 
 ```bash
 git clone https://github.com/budala187/gamte_test.git
 cd gamte_test
 git checkout claude/lol-tetris-game-72dveo
+npm start
 ```
 
-If you already cloned it, just `git pull`.
+It prints the URL. Open **<http://localhost:8000>**. Stop it with
+<kbd>Ctrl</kbd>+<kbd>C</kbd>.
+
+If port 8000 is taken, pick another:
+
+```bash
+npm start -- 3000
+```
+
+If you already cloned the repo, `git pull` first.
+
+### If you do not want to use npm
+
+| Command | Needs |
+| --- | --- |
+| `node tools/serve.js` | Node (identical to `npm start`) |
+| `npx serve .` | Node + internet, downloads a package |
+| `python3 -m http.server 8000` | Python installed and on PATH |
+| double-click `index.html` | nothing at all |
+
+That last one really does work — the game is written as classic scripts rather
+than ES modules specifically so it runs straight off the filesystem. You lose
+nothing except a realistic hosting setup.
+
+**VS Code users:** install the *Live Server* extension, right-click
+`index.html`, "Open with Live Server". It reloads the page whenever you save.
+
+### Other npm scripts
+
+```bash
+npm test        # rule tests
+npm run balance # is the game survivable, and are pure rows reachable?
+npm run art     # rebuild tiles from assets/source/ (this one needs Python + Pillow)
+```
 
 ### Putting it online
 
