@@ -1,9 +1,13 @@
 # League of Tetris
 
-Tetris, but every block belongs to a **region**. Rows clear the normal way — but
-a row that is **entirely one region** pays **5×**. **Champion** blocks are 1×1
-and fire their ability **automatically** the moment they touch a block of their
-own region.
+Tetris across the thirteen regions of Runeterra. Rows clear the normal way —
+but a row that is **entirely one region** pays **5×**. **Champion** blocks are
+1×1 and fire their ability **automatically** the moment they touch a block of
+their own region; if they never touch it, they just sit there as dead weight.
+
+Eleven levels: level 1 features 3 random regions, and each level adds another
+until all 13 are in play. Levels are gated by score, and the run keeps going
+past level 11 so high scores stay open-ended.
 
 Pure HTML/CSS/JavaScript. No build step, no frameworks, no dependencies.
 
@@ -77,31 +81,49 @@ On phones an on-screen button row appears automatically.
 
 ## Rules
 
-- **Full rows clear**, exactly like normal Tetris.
-- **A row that is entirely one region pays 5×.** This is the main thing to play
-  for. Clearing 2/3/4 rows at once multiplies on top of that.
-- Pieces are a single region each, and **regions arrive in runs** — you get 12
-  to 20 pieces of one region before it switches. That run is your window to
-  build a pure row; without it, filling ten cells of one region would be
-  impossible.
-- **Champions are 1×1 and fire automatically** when a block of their own region
-  ends up directly next to them (up, down, left or right). No clicking. Another
-  champion of the same region counts as contact too.
-- A champion that lands away from its own region just sits there as an ordinary
-  block until its region reaches it — so a stray champion is a liability.
-- Firing an ability consumes the champion. Anything an ability destroys falls,
-  which can complete more rows and chain.
+- **Full rows clear**, exactly like normal Tetris. The board is 12 wide.
+- **A row that is entirely one region pays 5×.** That is the thing to play for.
+  Clearing 2–5 rows at once multiplies on top.
+- Each piece is a single region. One region is **featured** at a time and gets
+  about 70% of the pieces, the rest are spread over the others — so the board
+  stays visibly mixed while you can still bank enough of one region to finish a
+  pure row.
+- **Champions are 1×1 and fire on contact.** The instant a block of their own
+  region ends up next to them (up, down, left or right) the ability goes off.
+  Another champion of the same region counts as contact too.
+- A champion that lands away from its region **settles and stays**, taking up
+  space until its region reaches it.
+- Firing an ability consumes the champion. Whatever it destroys falls, which
+  can complete rows and chain.
+- **Levels** are reached by score. Each one brings another region into the
+  pool and speeds the drop up.
 
-### Champions
+### The thirteen champions
 
 | Champion | Region | Ability | Effect |
 | --- | --- | --- | --- |
-| Sivir | Shurima | Boomerang Blade | Destroys every Shurima block on the board |
-| Twitch | Zaun | Spray and Pray | Shoots 8 random blocks anywhere |
 | Darius | Noxus | Noxian Guillotine | Executes the whole column below him |
-| Ahri | Ionia | Orb of Deception | Destroys her entire row |
-| Kai'Sa | Void | Icathian Rain | Missiles the 3×3 around her |
-| Sejuani | Freljord | Glacial Prison | Shatters every block on the board |
+| Kayle | Demacia | Divine Judgment | Destroys a circle around her |
+| Gwen | Shadow Isles | Snip Snip! | A cone widening downward |
+| Ahri | Ionia | Orb of Deception | Destroys one row horizontally |
+| Sivir | Shurima | Boomerang Blade | Every Shurima block on the board |
+| Twitch | Zaun | Spray and Pray | 5 random blocks, any region |
+| Kai'Sa | Void | Icathian Rain | The 3×3 around her |
+| Sejuani | Freljord | Glacial Prison | Every block on the board |
+| Pyke | Bilgewater | Death from Below | An X through both diagonals |
+| Teemo | Bandle City | Noxious Trap | 3 shrooms, each a 2×2 blast |
+| Qiyana | Ixtal | Supreme Display of Talent | A hollow O — the middle survives |
+| Aurelion Sol | Targon | Falling Star | The whole board, plus a big bonus |
+| Caitlyn | Piltover | Ace in the Hole | Destroys every champion block **and sets off their abilities** |
+
+You listed Caitlyn under Bilgewater, but you also listed Pyke there and shipped
+a Piltover crest — so Caitlyn is Piltover here, which makes it exactly one
+champion per region.
+
+### High scores
+
+Kept in memory for the session and shown beside the board. **A page refresh
+clears them** — that is deliberate until there is an account system.
 
 ---
 
@@ -113,7 +135,7 @@ css/style.css       all styling
 src/config.js       ← REGIONS, CHAMPIONS, tuning numbers. Edit this one.
 src/assets.js       image loading, with fallback when art is missing
 src/engine.js       pure rules: board, pieces, rows, gravity, contact triggers
-src/abilities.js    the six champion effects
+src/abilities.js    the thirteen champion effects
 src/render.js       canvas drawing
 src/main.js         game loop, input, UI
 test/engine.test.js headless rule tests
@@ -145,13 +167,16 @@ See **[ASSETS.md](ASSETS.md)** for the details.
 Everything worth tweaking is at the top of `src/config.js`:
 
 ```js
-PURE_ROW_MULTIPLIER: 5,    // what a single-region row pays
-REGION_RUN_MIN: 12,        // how long one region keeps falling
-REGION_RUN_MAX: 20,
-CHAMPION_CHANCE: 0.12,     // how often a champion piece spawns
-CHAMPION_MATCHES_RUN: 0.75,// how often that champion suits the current region
+COLS: 12,                     // board width
+PURE_ROW_MULTIPLIER: 5,       // what a single-region row pays
+FEATURED_SHARE: 0.70,         // share of pieces using the featured region
+FEATURE_ROTATE_MIN/MAX: 8/14, // pieces before the feature changes
+CHAMPION_CHANCE: 0.20,        // how often a champion piece spawns
+CHAMPION_MATCHES_FEATURE: 0.6,
 CHAMPION_CONTACT_DIAGONAL: false,
-DROP_BASE: 800,            // fall speed at level 1
+LEVEL_REGIONS_START: 3,       // regions at level 1
+LEVEL_TARGETS: [...],         // score gates per level
+DROP_BASE: 850,               // fall speed at level 1
 ```
 
 Adding a champion is two edits: an entry in `LOL.CHAMPIONS` (config.js) and one
@@ -164,13 +189,19 @@ node test/engine.test.js    # rules: rows, purity, contact triggers, all six abi
 node tools/balance.js       # is the game survivable, and are pure rows reachable?
 ```
 
-Current balance numbers, from a simulated player:
+Current numbers from `tools/balance.js`, using a simulated player:
 
-- Survival-focused play: ~237 of 300 pieces survived, **34% of cleared rows come
-  out pure** without even trying for it.
-- Purity-focused play: **51% pure rows**, but it dies around 127 pieces — greed
-  has a real cost, which is what makes the bonus a decision.
-- Champions fire ~20 times per game.
+- Survival-focused play clears ~35 rows over 250 pieces and fires **26–37
+  champion abilities per game**.
+- A player actively chasing pure rows gets **~8–11% of clears pure**, but dies
+  roughly half as deep — greed costs you, which is what makes the 5× a
+  decision rather than free points.
+
+**The one honest trade-off:** widening the board to 12 and mixing the regions
+for variety both make "entirely one region" harder. Those two requests pull
+against the 5× bonus. If pure rows feel too rare when you play it, raise
+`FEATURED_SHARE` toward 0.85 (more of one region at a time) or drop `COLS`
+back to 10 — both are one-line changes in `src/config.js`.
 
 ---
 

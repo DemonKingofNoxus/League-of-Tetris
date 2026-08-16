@@ -14,28 +14,42 @@ Requires Pillow: `pip install Pillow`.
 
 ## What is already done
 
-**Region crests** — the six PNGs you supplied were already gold on a
+**Region crests** — the thirteen PNGs you supplied were already gold on a
 transparent background, so there was no white background to remove. The script
 trims the empty margin, pads each one to a square (the renderer draws tiles
 square and would otherwise stretch a 101×162 crest), brightens the gold, and
 adds a dark drop shadow so the crest still reads on the gold-ish Shurima tile.
 
 The tile background colour is the region colour from `src/config.js`, kept
-deliberately muted so six of them on screen at once are easy on the eyes:
+deliberately deep so thirteen of them on one board read as a set:
 
 | Region | Colour | Source file |
 | --- | --- | --- |
-| Noxus | `#a8474a` muted red | `noxus_crest_icon.png` |
-| Void | `#8a63ad` muted purple | `void_crest_icon.png` |
-| Freljord | `#5b90bd` muted blue | `freljord_crest_icon.png` |
-| Zaun | `#67a15c` muted green | `zaun_crest_icon.png` |
-| Ionia | `#c47ba0` muted pink | `iona_crest_icon.png` |
-| Shurima | `#9a7830` deep amber | `shurima_crest_icon.png` |
+| Noxus | `#a4383c` crimson | `noxus_crest_icon.png` |
+| Demacia | `#3d64b0` royal blue | `demacia_crest_icon.png` |
+| Shadow Isles | `#2f7d70` spectral teal | `shadow_isles_crest_icon.png` |
+| Ionia | `#c9789f` blossom rose | `iona_crest_icon.png` |
+| Shurima | `#a8752a` bronze amber | `shurima_crest_icon.png` |
+| Zaun | `#7fa82c` acid chartreuse | `zaun_crest_icon.png` |
+| Void | `#7b52a8` violet | `void_crest_icon.png` |
+| Freljord | `#5aa3cf` ice blue | `freljord_crest_icon.png` |
+| Bilgewater | `#c06437` rust orange | `bilgewater_crest_icon.png` |
+| Bandle City | `#c9a83f` warm gold | `bandle_city_crest_icon.png` |
+| Ixtal | `#3d9a5c` jungle emerald | `ixtal_crest_icon.png` |
+| Targon | `#8b7fd6` celestial periwinkle | `mt_targon_crest_icon.png` |
+| Piltover | `#2f9c9c` brass teal | `piltover_crest_icon.png` |
 
-Shurima is the one that had to move away from a bright yellow: a gold crest on
-a gold tile was invisible. It is still clearly the yellow one, just deeper.
+Thirteen colours have to stay apart at 30px. They are grouped so no two
+neighbours in hue sit next to each other in lightness: four blues split into
+royal / ice / teal / periwinkle, four greens into spectral / acid / emerald /
+gold, and the reds into crimson / rust.
 
-**Champion portraits** — the six splash arts were cropped square and centred on
+Every crest gets a hard dark outline plus a soft shadow before the gold is
+composited. That outline is what lets a gold crest read on the yellow-ish
+tiles — Shurima and Bandle City would otherwise disappear into their own
+background.
+
+**Champion portraits** — the thirteen splash arts were cropped square and centred on
 each champion's head. Splash art at 26px is an unreadable smudge, so each crop
 is tight to the face. The zoom is set **per champion**, because Darius is
 painted much closer to camera than Sejuani; a single shared value would make him
@@ -48,12 +62,19 @@ Everything is in one table at the top of `tools/process-art.py`:
 ```python
 # champion key -> (source, head_x, head_y, crop_height)
 CHAMPIONS = {
-    'ahri':    ('Ahri.jpg',    0.555, 0.200, 0.32),
-    'darius':  ('Darius.jpg',  0.530, 0.180, 0.36),
-    'kaisa':   ('Kaisa.jpg',   0.498, 0.180, 0.32),
-    'sejuani': ('Sejuani.jpg', 0.540, 0.180, 0.19),
-    'sivir':   ('Sivir.jpg',   0.533, 0.136, 0.22),
-    'twitch':  ('Twitch.jpg',  0.658, 0.331, 0.22),
+    'ahri':        ('Ahri.jpg',         0.555, 0.200, 0.32),
+    'darius':      ('Darius.jpg',       0.530, 0.180, 0.36),
+    'kaisa':       ('Kaisa.jpg',        0.498, 0.180, 0.32),
+    'sejuani':     ('Sejuani.jpg',      0.540, 0.180, 0.19),
+    'sivir':       ('Sivir.jpg',        0.533, 0.136, 0.22),
+    'twitch':      ('Twitch.jpg',       0.658, 0.331, 0.22),
+    'kayle':       ('kayle.jpg',        0.715, 0.260, 0.20),
+    'gwen':        ('gwen.jpg',         0.500, 0.135, 0.24),
+    'pyke':        ('pyke.jpg',         0.530, 0.400, 0.35),
+    'teemo':       ('teemo.jpg',        0.475, 0.270, 0.52),
+    'qiyana':      ('kyana.jpg',        0.515, 0.225, 0.28),
+    'aurelionSol': ('aurelion-sol.jpg', 0.575, 0.150, 0.32),
+    'caitlyn':     ('kaitlyn.jpg',      0.710, 0.230, 0.20),
 }
 ```
 

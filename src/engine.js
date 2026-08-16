@@ -32,24 +32,73 @@
   /* Piece generation                                                    */
   /* ------------------------------------------------------------------ */
 
-  let runRegion = null;
-  let runLeft = 0;
+  /*
+   * Only the regions in play for the current level can appear. One of them is
+   * "featured" and takes FEATURED_SHARE of the pieces; the rest are spread
+   * over the others. That is a deliberate middle ground: drawing uniformly
+   * makes a pure row unreachable (a row is 12 cells and a piece is 4), while
+   * emitting one region at a time in long runs makes the board monotonous.
+   */
+  let active = LOL.REGION_KEYS.slice();
+  let featured = null;
+  let featureLeft = 0;
 
-  /* Champions mostly belong to the region currently falling. Picked purely at
-     random they would usually be the wrong region for the current run, sit
-     inert as dead weight, and never get to fire. */
-  function pickChampionKey() {
-    if (runRegion && Math.random() < C.CHAMPION_MATCHES_RUN) {
-      const matching = LOL.CHAMPION_KEYS.filter(function (k) {
-        return LOL.CHAMPIONS[k].region === runRegion;
-      });
-      if (matching.length) return pick(matching);
+  function setActiveRegions(keys) {
+    active = (keys && keys.length) ? keys.slice() : LOL.REGION_KEYS.slice();
+    /* Keep the featured region only if it survived into the new pool. */
+    if (active.indexOf(featured) === -1) { featured = null; featureLeft = 0; }
+  }
+
+  function getActiveRegions() { return active.slice(); }
+
+  function rotateFeature() {
+    const previous = featured;
+    if (active.length > 1) {
+      do { featured = pick(active); } while (featured === previous);
+    } else {
+      featured = active[0];
     }
-    return pick(LOL.CHAMPION_KEYS);
+    featureLeft = C.FEATURE_ROTATE_MIN +
+      randInt(Math.max(1, C.FEATURE_ROTATE_MAX - C.FEATURE_ROTATE_MIN + 1));
+  }
+
+  function getFeatured() {
+    if (featured === null) rotateFeature();
+    return featured;
+  }
+
+  function nextPieceRegion() {
+    if (featureLeft <= 0) rotateFeature();
+    featureLeft--;
+
+    if (Math.random() < C.FEATURED_SHARE) return featured;
+
+    /* Anything except the featured region, so the mix stays visible. */
+    const others = active.filter(function (k) { return k !== featured; });
+    return others.length ? pick(others) : featured;
+  }
+
+  function resetGenerator() { featured = null; featureLeft = 0; }
+
+  /* Champions only exist for regions in play, and mostly match the region
+     currently falling — otherwise they land nowhere near their own colour and
+     sit as dead weight for the rest of the game. */
+  function pickChampionKey() {
+    const available = active
+      .map(function (r) { return LOL.CHAMPION_BY_REGION[r]; })
+      .filter(Boolean);
+    if (!available.length) return null;
+
+    if (Math.random() < C.CHAMPION_MATCHES_FEATURE) {
+      const match = LOL.CHAMPION_BY_REGION[getFeatured()];
+      if (match) return match;
+    }
+    return pick(available);
   }
 
   function makeChampionPiece() {
     const key = pickChampionKey();
+    if (!key) return makeTetromino();
     const champ = LOL.CHAMPIONS[key];
     return {
       kind: 'champion',
@@ -60,37 +109,15 @@
     };
   }
 
-  /* (run state is declared above makeChampionPiece so both can use it) */
-  /* Regions arrive in short runs rather than independently at random.
-     Without this a pure row is unreachable: a row is 10 cells, a piece is 4,
-     and with six regions shuffled freely you can never bank enough of one
-     region to finish a row in it. Runs are what make the pure-row bonus a
-     goal you can actually play towards. */
-  function nextPieceRegion() {
-    if (runLeft <= 0) {
-      const previous = runRegion;
-      do { runRegion = pick(LOL.REGION_KEYS); }
-      while (LOL.REGION_KEYS.length > 1 && runRegion === previous);
-      runLeft = C.REGION_RUN_MIN + randInt(C.REGION_RUN_MAX - C.REGION_RUN_MIN + 1);
-    }
-    runLeft--;
-    return runRegion;
-  }
-
-  function resetRuns() { runRegion = null; runLeft = 0; }
-
   function makeTetromino() {
     const shapeKey = pick(LOL.SHAPE_KEYS);
     const matrix = LOL.SHAPES[shapeKey].map(function (r) { return r.slice(); });
-    const primary = nextPieceRegion();
+    const region = nextPieceRegion();
 
-    /* At the default bias of 1.0 a piece is a single region, like classic
-       Tetris colours. Lowering the bias mixes other regions in. */
+    /* A piece is a single region, like classic Tetris colours. */
     const cells = matrix.map(function (row) {
       return row.map(function (v) {
-        if (!v) return null;
-        const region = Math.random() < C.PRIMARY_REGION_BIAS ? primary : pick(LOL.REGION_KEYS);
-        return { region: region, champ: null };
+        return v ? { region: region, champ: null } : null;
       });
     });
 
@@ -176,8 +203,7 @@
     return true;
   };
 
-  /* The region key if every block in the row shares one, otherwise null.
-     Only meaningful for a full row. */
+  /* The region key if every block in the row shares one, otherwise null. */
   Board.prototype.rowRegion = function (y) {
     const first = this.grid[this.idx(0, y)];
     if (!first) return null;
@@ -188,7 +214,6 @@
     return first.region;
   };
 
-  /* Every completely filled row, top to bottom, tagged with its pure region. */
   Board.prototype.fullRows = function () {
     const out = [];
     for (let y = 0; y < this.rows; y++) {
@@ -231,7 +256,6 @@
     return moved;
   };
 
-  /* Where would this piece land if hard-dropped? */
   Board.prototype.dropY = function (piece) {
     let y = piece.y;
     while (!this.collides(piece, piece.x, y + 1)) y++;
@@ -291,7 +315,10 @@
     makeTetromino: makeTetromino,
     makeChampionPiece: makeChampionPiece,
     rotatePiece: rotatePiece,
-    resetRuns: resetRuns
+    setActiveRegions: setActiveRegions,
+    getActiveRegions: getActiveRegions,
+    getFeatured: getFeatured,
+    resetGenerator: resetGenerator
   };
 
 })(window.LOL);

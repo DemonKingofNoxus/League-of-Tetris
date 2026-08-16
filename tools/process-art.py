@@ -31,12 +31,19 @@ TILE = 128  # output size; tiles render at ~26px, so this is plenty
 
 # region key -> source filename
 REGIONS = {
-    'noxus':    'noxus_crest_icon.png',
-    'void':     'void_crest_icon.png',
-    'freljord': 'freljord_crest_icon.png',
-    'zaun':     'zaun_crest_icon.png',
-    'ionia':    'iona_crest_icon.png',
-    'shurima':  'shurima_crest_icon.png',
+    'noxus':       'noxus_crest_icon.png',
+    'demacia':     'demacia_crest_icon.png',
+    'shadowIsles': 'shadow_isles_crest_icon.png',
+    'ionia':       'iona_crest_icon.png',
+    'shurima':     'shurima_crest_icon.png',
+    'zaun':        'zaun_crest_icon.png',
+    'void':        'void_crest_icon.png',
+    'freljord':    'freljord_crest_icon.png',
+    'bilgewater':  'bilgewater_crest_icon.png',
+    'bandleCity':  'bandle_city_crest_icon.png',
+    'ixtal':       'ixtal_crest_icon.png',
+    'targon':      'mt_targon_crest_icon.png',
+    'piltover':    'piltover_crest_icon.png',
 }
 
 # champion key -> (source, head_x, head_y, crop_height)
@@ -46,12 +53,19 @@ REGIONS = {
 # size in its tile — Darius is painted much closer to camera than Sejuani, so
 # a single shared value would make him a nostril and her a speck.
 CHAMPIONS = {
-    'ahri':    ('Ahri.jpg',    0.555, 0.200, 0.32),
-    'darius':  ('Darius.jpg',  0.530, 0.180, 0.36),
-    'kaisa':   ('Kaisa.jpg',   0.498, 0.180, 0.32),
-    'sejuani': ('Sejuani.jpg', 0.540, 0.180, 0.19),
-    'sivir':   ('Sivir.jpg',   0.533, 0.136, 0.22),
-    'twitch':  ('Twitch.jpg',  0.658, 0.331, 0.22),
+    'ahri':        ('Ahri.jpg',         0.555, 0.200, 0.32),
+    'darius':      ('Darius.jpg',       0.530, 0.180, 0.36),
+    'kaisa':       ('Kaisa.jpg',        0.498, 0.180, 0.32),
+    'sejuani':     ('Sejuani.jpg',      0.540, 0.180, 0.19),
+    'sivir':       ('Sivir.jpg',        0.533, 0.136, 0.22),
+    'twitch':      ('Twitch.jpg',       0.658, 0.331, 0.22),
+    'kayle':       ('kayle.jpg',        0.715, 0.260, 0.20),
+    'gwen':        ('gwen.jpg',         0.500, 0.135, 0.24),
+    'pyke':        ('pyke.jpg',         0.530, 0.400, 0.35),
+    'teemo':       ('teemo.jpg',        0.475, 0.270, 0.52),
+    'qiyana':      ('kyana.jpg',        0.515, 0.225, 0.28),
+    'aurelionSol': ('aurelion-sol.jpg', 0.575, 0.150, 0.32),
+    'caitlyn':     ('kaitlyn.jpg',      0.710, 0.230, 0.20),
 }
 
 
@@ -78,10 +92,20 @@ def process_region(src_path, out_path):
 
     # Dark drop shadow built from the alpha channel. This is what keeps the
     # gold crest readable on Shurima's gold tile.
+    alpha = im.split()[3]
+
+    # A tight dark outline first, then a soft shadow under it. The outline is
+    # what makes a gold crest survive on the yellow-ish tiles (Shurima,
+    # Bandle City); blur alone washes out against them.
+    outline = Image.new('RGBA', (TILE, TILE), (0, 0, 0, 0))
+    outline.paste((0, 0, 0, 235), pos, alpha)
+    outline = outline.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.GaussianBlur(1))
+    canvas.alpha_composite(outline)
+
     shadow = Image.new('RGBA', (TILE, TILE), (0, 0, 0, 0))
-    shadow.paste((0, 0, 0, 190), pos, im.split()[3])
-    shadow = shadow.filter(ImageFilter.GaussianBlur(3))
-    canvas.alpha_composite(shadow, (0, 2))
+    shadow.paste((0, 0, 0, 150), pos, alpha)
+    shadow = shadow.filter(ImageFilter.GaussianBlur(4))
+    canvas.alpha_composite(shadow, (0, 3))
 
     canvas.alpha_composite(im, pos)
     canvas.save(out_path)

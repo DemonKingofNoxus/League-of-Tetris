@@ -9,45 +9,66 @@
 </head>
 <body>
 
+<div class="backdrop" aria-hidden="true"></div>
+
 <div id="app">
 
   <header id="masthead">
+    <div class="rule"><span></span><i></i><span></span></div>
     <h1>Runeterra Blocks</h1>
-    <p class="tagline">Match regions. Trigger champions. Survive.</p>
+    <p class="tagline">Thirteen regions · one row, one banner · champions answer their own</p>
   </header>
 
   <main id="stage">
 
     <!-- ---------- left rail ---------- -->
     <aside class="rail rail-left">
-      <section class="panel">
+
+      <section class="panel panel-score">
         <h2>Score</h2>
-        <div class="stat stat-big" id="ui-score">0</div>
+        <div class="stat stat-score" id="ui-score">0</div>
       </section>
+
+      <section class="panel panel-level">
+        <h2>Level <b id="ui-level">1</b></h2>
+        <div class="progress"><i id="ui-progress" style="width:0%"></i></div>
+        <p class="progress-note"><span id="ui-target">0 / 2,000</span> to level <b id="ui-nextlevel">2</b></p>
+      </section>
+
+      <section class="panel panel-split">
+        <div>
+          <h2>Rows</h2>
+          <div class="stat" id="ui-rows">0</div>
+        </div>
+        <div>
+          <h2>Pure</h2>
+          <div class="stat stat-pure" id="ui-pure">0</div>
+        </div>
+      </section>
+
       <section class="panel">
-        <h2>Level</h2>
-        <div class="stat" id="ui-level">1</div>
+        <h2>High scores <em>this session</em></h2>
+        <ol id="ui-highscores" class="score-list">
+          <li class="empty">no runs yet</li>
+        </ol>
       </section>
-      <section class="panel">
-        <h2>Rows</h2>
-        <div class="stat" id="ui-rows">0</div>
-      </section>
-      <section class="panel">
-        <h2>Pure rows</h2>
-        <div class="stat" id="ui-pure">0</div>
-      </section>
+
     </aside>
 
     <!-- ---------- board ---------- -->
     <section class="board-wrap">
-      <canvas id="board" width="320" height="640" aria-label="Game board"></canvas>
+      <div class="board-frame">
+        <canvas id="board" width="384" height="640" aria-label="Game board"></canvas>
 
-      <div id="overlay" class="overlay hidden">
-        <div class="overlay-card">
-          <h2 id="overlay-title">Paused</h2>
-          <p id="overlay-body">Press P to resume.</p>
-          <button id="overlay-btn" type="button">Play</button>
+        <div id="overlay" class="overlay hidden">
+          <div class="overlay-card">
+            <h2 id="overlay-title">Paused</h2>
+            <p id="overlay-body">Press P to resume.</p>
+            <button id="overlay-btn" type="button">Play</button>
+          </div>
         </div>
+
+        <div id="banner" class="banner"><b id="banner-title"></b><span id="banner-sub"></span></div>
       </div>
 
       <div id="toast" class="toast"></div>
@@ -55,22 +76,24 @@
 
     <!-- ---------- right rail ---------- -->
     <aside class="rail rail-right">
-      <section class="panel">
+
+      <section class="panel panel-next">
         <h2>Next</h2>
-        <canvas id="next" width="128" height="128"></canvas>
+        <canvas id="next" width="140" height="120"></canvas>
       </section>
 
       <section class="panel">
         <h2>Champions on board</h2>
         <ul id="ui-champs" class="champ-list">
-          <li class="champ-empty">none on the board</li>
+          <li class="empty">none on the board</li>
         </ul>
       </section>
 
       <section class="panel">
-        <h2>Regions</h2>
+        <h2>Regions in play <em id="ui-region-count"></em></h2>
         <ul id="ui-regions" class="region-list"></ul>
       </section>
+
     </aside>
 
   </main>
@@ -85,19 +108,19 @@
   </div>
 
   <footer id="help">
-    <p>
-      <kbd>←</kbd><kbd>→</kbd> move &nbsp;·&nbsp;
-      <kbd>↓</kbd> soft drop &nbsp;·&nbsp;
-      <kbd>↑</kbd>/<kbd>X</kbd> rotate &nbsp;·&nbsp;
-      <kbd>Z</kbd> rotate back &nbsp;·&nbsp;
-      <kbd>Space</kbd> hard drop &nbsp;·&nbsp;
-      <kbd>P</kbd> pause &nbsp;·&nbsp;
+    <p class="keys">
+      <kbd>←</kbd><kbd>→</kbd> move
+      <kbd>↓</kbd> soft drop
+      <kbd>↑</kbd><kbd>X</kbd> rotate
+      <kbd>Z</kbd> back
+      <kbd>Space</kbd> hard drop
+      <kbd>P</kbd> pause
       <kbd>R</kbd> restart
     </p>
     <p class="help-rule">
-      Full rows clear. A row that is <b>all one region</b> pays
-      <b>5&times;</b>. Champions fire <b>automatically</b> the moment they
-      touch a block of their own region.
+      Full rows clear. A row of <b>one single region</b> pays <b>5×</b>.
+      Champions fire the instant they touch their own region — otherwise they
+      just sit there.
     </p>
   </footer>
 

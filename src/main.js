@@ -1,5 +1,5 @@
 /*
- * main.js — game loop, input, UI wiring.
+ * main.js — game loop, input, level progression, UI wiring.
  */
 (function (LOL) {
   'use strict';
@@ -7,42 +7,99 @@
   const C = LOL.CONFIG;
   const E = LOL.Engine;
 
-  const el = {
-    board:    document.getElementById('board'),
-    next:     document.getElementById('next'),
-    score:    document.getElementById('ui-score'),
-    level:    document.getElementById('ui-level'),
-    rows:     document.getElementById('ui-rows'),
-    pure:     document.getElementById('ui-pure'),
-    champs:   document.getElementById('ui-champs'),
-    regions:  document.getElementById('ui-regions'),
-    overlay:  document.getElementById('overlay'),
-    oTitle:   document.getElementById('overlay-title'),
-    oBody:    document.getElementById('overlay-body'),
-    oBtn:     document.getElementById('overlay-btn'),
-    toast:    document.getElementById('toast'),
-    touch:    document.getElementById('touch')
-  };
+  const el = {};
+  ['board', 'next', 'ui-score', 'ui-level', 'ui-rows', 'ui-pure', 'ui-progress',
+   'ui-target', 'ui-nextlevel', 'ui-champs', 'ui-regions', 'ui-region-count', 'ui-highscores',
+   'overlay', 'overlay-title', 'overlay-body', 'overlay-btn', 'toast',
+   'banner', 'banner-title', 'banner-sub', 'touch'
+  ].forEach(function (id) {
+    el[id.replace(/-(\w)/g, function (m, c) { return c.toUpperCase(); })] =
+      document.getElementById(id);
+  });
 
-  let renderer, state, lastTime = 0, toastTimer = 0;
+  let renderer, state, lastTime = 0, toastTimer = 0, bannerTimer = 0;
+
+  /* High scores live in memory only: a page refresh wipes them, which is what
+     was asked for until there are real accounts. */
+  const highScores = [];
+
+  /* ------------------------------------------------------------------ */
+  /* Levels                                                              */
+  /* ------------------------------------------------------------------ */
+
+  /* Score needed to leave `level`. Past the authored table the targets keep
+     growing so the run stays open-ended for high scores. */
+  function targetFor(level) {
+    const t = C.LEVEL_TARGETS;
+    if (level <= t.length) return t[level - 1];
+    let value = t[t.length - 1];
+    for (let i = t.length; i < level; i++) value = Math.round(value * 1.35);
+    return value;
+  }
+
+  function regionsForLevel(level) {
+    return Math.min(LOL.REGION_KEYS.length,
+      C.LEVEL_REGIONS_START + Math.min(level, C.LEVEL_COUNT) - 1);
+  }
+
+  /* Grow the pool by one random region that is not in it yet. */
+  function expandRegions() {
+    const want = regionsForLevel(state.level);
+    const pool = LOL.REGION_KEYS.filter(function (k) {
+      return state.regions.indexOf(k) === -1;
+    });
+    while (state.regions.length < want && pool.length) {
+      const i = Math.floor(Math.random() * pool.length);
+      state.regions.push(pool.splice(i, 1)[0]);
+    }
+    E.setActiveRegions(state.regions);
+  }
+
+  function checkLevelUp() {
+    let promoted = false;
+    while (state.score >= targetFor(state.level)) {
+      state.level++;
+      promoted = true;
+    }
+    if (!promoted) return;
+
+    const before = state.regions.length;
+    expandRegions();
+    const added = state.regions.slice(before);
+
+    banner('Level ' + state.level,
+      added.length ? added.map(function (k) { return LOL.REGIONS[k].name; }).join(' · ') + ' joins the fight'
+                   : 'All thirteen regions in play');
+  }
 
   /* ------------------------------------------------------------------ */
   /* State                                                               */
   /* ------------------------------------------------------------------ */
 
   function newGame() {
+    E.resetGenerator();
+
+    const pool = LOL.REGION_KEYS.slice();
+    const regions = [];
+    while (regions.length < C.LEVEL_REGIONS_START && pool.length) {
+      regions.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    }
+    E.setActiveRegions(regions);
+
     state = {
       board: new E.Board(),
+      regions: regions,
       piece: E.makePiece(),
       next: E.makePiece(),
       phase: 'playing',        // playing | flash | paused | gameover
       pieceVisible: true,
-      pendingSpawn: false,     // does the current resolve end with a new piece?
+      pendingSpawn: false,
       dropTimer: 0,
       lockTimer: 0,
       grounded: false,
       flash: null,
-      flashKind: null,         // 'rows' | 'ability'
+      flashKind: null,
+      flashPure: false,
       flashTimer: 0,
       pendingRows: null,
       resolveSteps: 0,
@@ -51,14 +108,17 @@
       score: 0,
       level: 1,
       rowsCleared: 0,
-      pureRows: 0
+      pureRows: 0,
+      recorded: false
     };
+
     hideOverlay();
     syncUI();
+    syncRegions();
   }
 
   function dropInterval() {
-    return Math.max(C.DROP_MIN, C.DROP_BASE * Math.pow(0.85, state.level - 1));
+    return Math.max(C.DROP_MIN, C.DROP_BASE * Math.pow(C.DROP_FACTOR, state.level - 1));
   }
 
   /* ------------------------------------------------------------------ */
@@ -77,15 +137,17 @@
   function stepResolve() {
     /* Safety net: every step destroys at least one block, so this can only
        trip if a champion is misconfigured. */
-    if (++state.resolveSteps > 200) { endResolve(); return; }
+    if (++state.resolveSteps > 300) { endResolve(); return; }
 
     const trig = state.board.nextTriggeredChampion();
     if (trig) {
       const result = LOL.Abilities.trigger(state.board, trig.x, trig.y);
       if (result) {
-        state.score += C.SCORE_ABILITY;
-        toast(result.champ.name + ' — ' + result.champ.abilityName);
-        startFlash(new Set(result.destroy), 'ability');
+        state.score += C.SCORE_ABILITY + (result.bonus || 0);
+        toast(result.champ.name + ' — ' + result.champ.abilityName +
+              (result.chained && result.chained.length
+                ? '  (+' + result.chained.length + ' chained)' : ''));
+        startFlash(new Set(result.destroy), 'ability', false);
         return;
       }
       /* Unknown ability — clear the block so we cannot loop on it. */
@@ -100,16 +162,17 @@
         for (let x = 0; x < board.cols; x++) cells.add(board.idx(x, r.y));
       });
       state.pendingRows = rows;
-      startFlash(cells, 'rows');
+      startFlash(cells, 'rows', rows.some(function (r) { return !!r.region; }));
       return;
     }
 
     endResolve();
   }
 
-  function startFlash(cells, kind) {
+  function startFlash(cells, kind, pure) {
     state.flash = cells;
     state.flashKind = kind;
+    state.flashPure = !!pure;
     state.flashTimer = C.FLASH_MS;
     state.phase = 'flash';
   }
@@ -136,13 +199,12 @@
       const multi = C.MULTI_ROW[Math.min(rows.length, C.MULTI_ROW.length - 1)] || 1;
       state.score += Math.round(value * multi * state.level * state.chain);
       state.rowsCleared += rows.length;
-      state.level = 1 + Math.floor(state.rowsCleared / C.ROWS_PER_LEVEL);
 
       if (pureRegion) {
         toast('PURE ' + LOL.REGIONS[pureRegion].name.toUpperCase() +
-              '!  x' + C.PURE_ROW_MULTIPLIER);
+              '  ×' + C.PURE_ROW_MULTIPLIER);
       } else if (state.chain > 1) {
-        toast('Chain x' + state.chain + '!');
+        toast('Chain ×' + state.chain);
       }
 
       state.board.removeRows(rows);
@@ -156,6 +218,8 @@
     state.board.applyGravity();
     state.flash = null;
     state.flashKind = null;
+    state.flashPure = false;
+    checkLevelUp();
     syncUI();
     stepResolve();
   }
@@ -194,7 +258,6 @@
   function rotate(dir) {
     if (state.phase !== 'playing') return;
     const rotated = E.rotatePiece(state.piece, dir);
-    // Simple wall kicks: try in place, then nudge sideways, then up.
     const kicks = [[0, 0], [-1, 0], [1, 0], [-2, 0], [2, 0], [0, -1]];
     for (let i = 0; i < kicks.length; i++) {
       const nx = state.piece.x + kicks[i][0];
@@ -236,8 +299,47 @@
   function gameOver() {
     state.phase = 'gameover';
     state.pieceVisible = false;
-    showOverlay('Game over', 'Score ' + state.score.toLocaleString() +
-                ' · level ' + state.level + ' · ' + state.rowsCleared + ' rows', 'Play again');
+    recordScore();
+    showOverlay('Game over',
+      state.score.toLocaleString() + ' points · level ' + state.level + ' · ' +
+      state.rowsCleared + ' rows (' + state.pureRows + ' pure)',
+      'Play again');
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* High scores — session memory only                                   */
+  /* ------------------------------------------------------------------ */
+
+  function recordScore() {
+    if (state.recorded || state.score <= 0) return;
+    state.recorded = true;
+
+    const entry = {
+      score: state.score,
+      level: state.level,
+      rows: state.rowsCleared,
+      pure: state.pureRows,
+      fresh: true
+    };
+    highScores.forEach(function (h) { h.fresh = false; });
+    highScores.push(entry);
+    highScores.sort(function (a, b) { return b.score - a.score; });
+    if (highScores.length > C.HIGHSCORE_LIMIT) highScores.length = C.HIGHSCORE_LIMIT;
+    syncHighScores();
+  }
+
+  function syncHighScores() {
+    if (!highScores.length) {
+      el.uiHighscores.innerHTML = '<li class="empty">no runs yet</li>';
+      return;
+    }
+    el.uiHighscores.innerHTML = highScores.map(function (h, i) {
+      return '<li class="' + (h.fresh ? 'fresh' : '') + '">' +
+             '<span class="rank">' + (i + 1) + '</span>' +
+             '<span class="pts">' + h.score.toLocaleString() + '</span>' +
+             '<span class="meta">L' + h.level + ' · ' + h.rows + 'r · ' + h.pure + 'p</span>' +
+             '</li>';
+    }).join('');
   }
 
   /* ------------------------------------------------------------------ */
@@ -285,6 +387,10 @@
       toastTimer -= dt;
       if (toastTimer <= 0) el.toast.classList.remove('show');
     }
+    if (bannerTimer > 0) {
+      bannerTimer -= dt;
+      if (bannerTimer <= 0) el.banner.classList.remove('show');
+    }
 
     requestAnimationFrame(frame);
   }
@@ -294,47 +400,77 @@
   /* ------------------------------------------------------------------ */
 
   function syncUI() {
-    el.score.textContent = state.score.toLocaleString();
-    el.level.textContent = state.level;
-    el.rows.textContent = state.rowsCleared;
-    el.pure.textContent = state.pureRows;
+    el.uiScore.textContent = state.score.toLocaleString();
+    el.uiLevel.textContent = state.level;
+    el.uiRows.textContent = state.rowsCleared;
+    el.uiPure.textContent = state.pureRows;
+
+    const target = targetFor(state.level);
+    const floor = state.level > 1 ? targetFor(state.level - 1) : 0;
+    const pct = Math.max(0, Math.min(100,
+      100 * (state.score - floor) / Math.max(1, target - floor)));
+    el.uiProgress.style.width = pct.toFixed(1) + '%';
+    el.uiTarget.textContent = state.score.toLocaleString() + ' / ' + target.toLocaleString();
+    el.uiNextlevel.textContent = state.level + 1;
 
     const champs = state.board.champions();
     if (!champs.length) {
-      el.champs.innerHTML = '<li class="champ-empty">none on the board</li>';
+      el.uiChamps.innerHTML = '<li class="empty">none on the board</li>';
     } else {
       const seen = {};
-      el.champs.innerHTML = champs.map(function (c) {
+      el.uiChamps.innerHTML = champs.map(function (c) {
         if (seen[c.key]) return '';
         seen[c.key] = true;
         const champ = LOL.CHAMPIONS[c.key];
         const region = LOL.REGIONS[champ.region];
-        return '<li><b>' + champ.name + '</b>' +
-               '<span>' + champ.abilityName + '</span>' +
-               '<em>' + champ.desc + '</em>' +
-               '<i class="trigger"><span class="swatch" style="background:' + region.color +
-               '"></span>fires on contact with ' + region.name + '</i></li>';
+        const art = LOL.Assets.get(champ.art);
+        return '<li>' +
+          (art ? '<img src="' + champ.art + '" alt="">' :
+                 '<span class="swatch" style="background:' + region.color + '"></span>') +
+          '<div><b>' + champ.name + '</b>' +
+          '<span>' + champ.abilityName + '</span>' +
+          '<em>' + champ.desc + '</em>' +
+          '<i class="trigger"><span class="swatch" style="background:' + region.color +
+          '"></span>needs ' + region.name + '</i></div></li>';
       }).join('');
     }
   }
 
-  function buildRegionLegend() {
-    el.regions.innerHTML = LOL.REGION_KEYS.map(function (k) {
+  /* The roster of regions currently in play, with the featured one lit. */
+  function syncRegions() {
+    const featured = E.getFeatured();
+    el.uiRegionCount.textContent = state.regions.length + ' / ' + LOL.REGION_KEYS.length;
+    el.uiRegions.innerHTML = state.regions.map(function (k) {
       const r = LOL.REGIONS[k];
-      return '<li><span class="swatch" style="background:' + r.color + '"></span>' + r.name + '</li>';
+      const art = LOL.Assets.get(r.art);
+      const bg = art ? 'background-image:url(' + r.art + ');background-color:' + r.color + ';'
+                     : 'background-color:' + r.color + ';';
+      return '<li class="' + (k === featured ? 'featured' : '') + '" style="color:' + r.color + '">' +
+             '<span class="swatch" style="' + bg + '"></span>' +
+             '<span>' + r.name + '</span></li>';
     }).join('');
   }
 
   function toast(msg) {
     el.toast.textContent = msg;
     el.toast.classList.add('show');
-    toastTimer = 1200;
+    toastTimer = 1300;
+  }
+
+  function banner(title, sub) {
+    el.bannerTitle.textContent = title;
+    el.bannerSub.textContent = sub;
+    el.banner.classList.remove('show');
+    void el.banner.offsetWidth;   // restart the animation
+    el.banner.classList.add('show');
+    bannerTimer = 1900;
+    syncRegions();
   }
 
   function showOverlay(title, body, btn) {
-    el.oTitle.textContent = title;
-    el.oBody.textContent = body;
-    el.oBtn.textContent = btn;
+    el.overlayTitle.textContent = title;
+    el.overlayBody.textContent = body;
+    el.overlayBtn.textContent = btn;
     el.overlay.classList.remove('hidden');
   }
 
@@ -389,12 +525,16 @@
 
   function boot() {
     renderer = new LOL.Renderer(el.board, el.next);
-    buildRegionLegend();
     newGame();
+    syncHighScores();
+
+    /* The featured region rotates as pieces are generated, so refresh the
+       roster periodically rather than on every frame. */
+    setInterval(function () { if (state && state.phase === 'playing') syncRegions(); }, 900);
 
     document.addEventListener('keydown', onKey);
 
-    el.oBtn.addEventListener('click', function () {
+    el.overlayBtn.addEventListener('click', function () {
       if (state.phase === 'gameover') newGame();
       else togglePause();
     });
@@ -412,10 +552,13 @@
   /* Handle for tests and for tinkering from the browser console. */
   LOL.game = {
     get state() { return state; },
+    get highScores() { return highScores; },
     newGame: newGame,
     move: move,
     rotate: rotate,
-    hardDrop: hardDrop
+    hardDrop: hardDrop,
+    targetFor: targetFor,
+    regionsForLevel: regionsForLevel
   };
 
   /* Art is optional, so boot regardless of whether it loads. */

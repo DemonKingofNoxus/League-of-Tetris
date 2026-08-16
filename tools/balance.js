@@ -115,6 +115,7 @@ function bestPlacement(board, piece, pureWeight) {
 }
 
 function playGame(maxPieces, pureWeight) {
+  E.resetGenerator();
   const board = new E.Board();
   let pieces = 0, rows = 0, pure = 0, abilities = 0;
   while (pieces < maxPieces) {
@@ -145,7 +146,15 @@ function report(label, games, maxPieces, pureWeight) {
   console.log('  abilities fired: ' + avg(function (r) { return r.abilities; }).toFixed(1) + '\n');
 }
 
-console.log('champion spawn rate ' + (C.CHAMPION_CHANCE * 100).toFixed(0) +
-            '%, piece region bias ' + C.PRIMARY_REGION_BIAS + '\n');
-report('A player who only wants to survive (ignores purity)', 12, 300, 0);
-report('A player chasing pure rows', 12, 300, 300);
+/* Regions in play grow with the level; measure a mid-game pool and the full
+   thirteen, since a wider pool makes pure rows much harder. */
+console.log('board ' + C.COLS + ' wide, champion spawn rate ' +
+            (C.CHAMPION_CHANCE * 100).toFixed(0) + '%, featured share ' +
+            C.FEATURED_SHARE + '\n');
+
+E.setActiveRegions(LOL.REGION_KEYS.slice(0, 5));
+report('Level 3 pool (5 regions) — surviving', 10, 250, 0);
+report('Level 3 pool (5 regions) — chasing pure rows', 10, 250, 300);
+
+E.setActiveRegions(LOL.REGION_KEYS);
+report('All 13 regions — surviving', 10, 250, 0);

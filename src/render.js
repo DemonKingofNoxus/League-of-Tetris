@@ -2,13 +2,51 @@
  * render.js — draws the board. Knows nothing about rules.
  *
  * Art strategy: if an image exists for a region/champion it is drawn; if not,
- * a flat coloured tile with the region's short label is drawn instead. That
- * means the game looks intentional even with zero art files present.
+ * a shaded tile with the region's short label is drawn instead. That means the
+ * game looks intentional even with zero art files present.
  */
 (function (LOL) {
   'use strict';
 
   const C = LOL.CONFIG;
+
+  /* ---------- small colour helpers ---------- */
+
+  function hexToRgb(hex) {
+    const h = hex.replace('#', '');
+    return [
+      parseInt(h.substring(0, 2), 16),
+      parseInt(h.substring(2, 4), 16),
+      parseInt(h.substring(4, 6), 16)
+    ];
+  }
+
+  function shade(hex, amount) {
+    const rgb = hexToRgb(hex).map(function (v) {
+      return Math.max(0, Math.min(255, Math.round(amount > 0
+        ? v + (255 - v) * amount
+        : v * (1 + amount))));
+    });
+    return 'rgb(' + rgb.join(',') + ')';
+  }
+
+  function rgba(hex, alpha) {
+    return 'rgba(' + hexToRgb(hex).join(',') + ',' + alpha + ')';
+  }
+
+  /* Cache derived shades — this runs for every tile of every frame. */
+  const shadeCache = Object.create(null);
+  function shades(hex) {
+    let s = shadeCache[hex];
+    if (!s) {
+      s = shadeCache[hex] = {
+        top: shade(hex, 0.30),
+        bottom: shade(hex, -0.34),
+        glow: rgba(hex, 0.55)
+      };
+    }
+    return s;
+  }
 
   function Renderer(canvas, nextCanvas) {
     this.canvas = canvas;
@@ -27,7 +65,6 @@
     this.scale();
   }
 
-  /* Match the backing store to the device pixel ratio so tiles stay crisp. */
   Renderer.prototype.scale = function () {
     const dpr = window.devicePixelRatio || 1;
     const sizes = [
@@ -46,68 +83,6 @@
 
   /* ---------- tile drawing ---------- */
 
-  Renderer.prototype.tile = function (ctx, cell, px, py, size, alpha) {
-    if (!cell) return;
-    const region = LOL.REGIONS[cell.region];
-    const color = region ? region.color : '#888';
-
-    ctx.save();
-    if (alpha !== undefined) ctx.globalAlpha = alpha;
-
-    const pad = Math.max(1, size * 0.05);
-    const x = px + pad, y = py + pad, s = size - pad * 2;
-
-    // Base plate — always drawn, so transparent art still reads as a block.
-    ctx.fillStyle = color;
-    this.roundRect(ctx, x, y, s, s, size * 0.16);
-    ctx.fill();
-
-    // Inner bevel for depth.
-    ctx.fillStyle = 'rgba(255,255,255,0.16)';
-    this.roundRect(ctx, x, y, s, s * 0.34, size * 0.14);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,0.20)';
-    this.roundRect(ctx, x, y + s * 0.72, s, s * 0.28, size * 0.14);
-    ctx.fill();
-
-    const art = LOL.Assets.get(region && region.art);
-    const champArt = cell.champ ? LOL.Assets.get(LOL.CHAMPIONS[cell.champ].art) : null;
-
-    if (champArt) {
-      ctx.drawImage(champArt, x, y, s, s);
-    } else if (cell.champ) {
-      this.label(ctx, LOL.CHAMPIONS[cell.champ].name.slice(0, 2).toUpperCase(), x, y, s, size);
-    } else if (art) {
-      const inset = s * 0.09;
-      ctx.drawImage(art, x + inset, y + inset, s - inset * 2, s - inset * 2);
-    } else {
-      this.label(ctx, region ? region.short : '?', x, y, s, size);
-    }
-
-    // Champions get a bright ring so it is obvious they are clickable.
-    if (cell.champ) {
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = Math.max(1.5, size * 0.07);
-      this.roundRect(ctx, x, y, s, s, size * 0.16);
-      ctx.stroke();
-    } else {
-      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-      ctx.lineWidth = 1;
-      this.roundRect(ctx, x, y, s, s, size * 0.16);
-      ctx.stroke();
-    }
-
-    ctx.restore();
-  };
-
-  Renderer.prototype.label = function (ctx, text, x, y, s, size) {
-    ctx.fillStyle = 'rgba(0,0,0,0.62)';
-    ctx.font = '700 ' + Math.round(size * 0.36) + 'px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, x + s / 2, y + s / 2 + size * 0.02);
-  };
-
   Renderer.prototype.roundRect = function (ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -118,6 +93,95 @@
     ctx.closePath();
   };
 
+  Renderer.prototype.tile = function (ctx, cell, px, py, size, opts) {
+    if (!cell) return;
+    opts = opts || {};
+
+    const region = LOL.REGIONS[cell.region];
+    const base = region ? region.color : '#8a8a8a';
+    const sh = shades(base);
+
+    const pad = Math.max(1, size * 0.045);
+    const x = px + pad, y = py + pad, s = size - pad * 2;
+    const r = size * 0.14;
+
+    ctx.save();
+    if (opts.alpha !== undefined) ctx.globalAlpha = opts.alpha;
+
+    /* Champions get an outer glow in their region colour so they read as
+       something that is about to happen, not just another block. */
+    if (cell.champ) {
+      ctx.shadowColor = sh.glow;
+      ctx.shadowBlur = size * 0.55;
+    }
+
+    const grad = ctx.createLinearGradient(x, y, x, y + s);
+    grad.addColorStop(0, sh.top);
+    grad.addColorStop(0.52, base);
+    grad.addColorStop(1, sh.bottom);
+    ctx.fillStyle = grad;
+    this.roundRect(ctx, x, y, s, s, r);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    /* Specular sweep across the top third. */
+    const gloss = ctx.createLinearGradient(x, y, x, y + s * 0.5);
+    gloss.addColorStop(0, 'rgba(255,255,255,0.34)');
+    gloss.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gloss;
+    this.roundRect(ctx, x + s * 0.06, y + s * 0.05, s * 0.88, s * 0.42, r * 0.8);
+    ctx.fill();
+
+    const art = LOL.Assets.get(region && region.art);
+    const champArt = cell.champ ? LOL.Assets.get(LOL.CHAMPIONS[cell.champ].art) : null;
+
+    if (champArt) {
+      ctx.save();
+      this.roundRect(ctx, x, y, s, s, r);
+      ctx.clip();
+      ctx.drawImage(champArt, x, y, s, s);
+      ctx.restore();
+    } else if (cell.champ) {
+      this.label(ctx, LOL.CHAMPIONS[cell.champ].name.slice(0, 2).toUpperCase(), x, y, s, size);
+    } else if (art) {
+      const inset = s * 0.08;
+      ctx.drawImage(art, x + inset, y + inset, s - inset * 2, s - inset * 2);
+    } else {
+      this.label(ctx, region ? region.short : '?', x, y, s, size);
+    }
+
+    if (cell.champ) {
+      /* Gold frame, so a champion is unmistakable at 30px. */
+      ctx.strokeStyle = '#f0dca8';
+      ctx.lineWidth = Math.max(1.5, size * 0.075);
+      this.roundRect(ctx, x, y, s, s, r);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.lineWidth = 1;
+      this.roundRect(ctx, x - 0.5, y - 0.5, s + 1, s + 1, r);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+      ctx.lineWidth = 1;
+      this.roundRect(ctx, x, y, s, s, r);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+      this.roundRect(ctx, x + 1, y + 1, s - 2, s - 2, r * 0.9);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  };
+
+  Renderer.prototype.label = function (ctx, text, x, y, s, size) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.font = '700 ' + Math.round(size * 0.3) + 'px ' +
+               'ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + s / 2, y + s / 2 + size * 0.02);
+  };
+
   /* ---------- frame ---------- */
 
   Renderer.prototype.draw = function (state) {
@@ -125,10 +189,14 @@
     const cell = C.CELL;
     const board = state.board;
 
-    ctx.fillStyle = C.UI.grid;
+    /* Board bed: a soft vertical wash, darker at the bottom where the stack
+       builds, so pieces stay legible as the board fills. */
+    const bed = ctx.createLinearGradient(0, 0, 0, this.h);
+    bed.addColorStop(0, '#0d1220');
+    bed.addColorStop(1, '#080b12');
+    ctx.fillStyle = bed;
     ctx.fillRect(0, 0, this.w, this.h);
 
-    // Grid lines
     ctx.strokeStyle = C.UI.gridLine;
     ctx.lineWidth = 1;
     for (let x = 1; x < board.cols; x++) {
@@ -144,26 +212,26 @@
       ctx.stroke();
     }
 
-    // Settled blocks
     for (let y = 0; y < board.rows; y++) {
       for (let x = 0; x < board.cols; x++) {
         this.tile(ctx, board.get(x, y), x * cell, y * cell, cell);
       }
     }
 
-    // Ghost + active piece
     if (state.piece && state.pieceVisible) {
       const ghostY = board.dropY(state.piece);
       if (ghostY !== state.piece.y) {
         ctx.save();
-        ctx.fillStyle = C.UI.ghost;
+        ctx.strokeStyle = C.UI.ghost;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
         for (let y = 0; y < state.piece.matrix.length; y++) {
           for (let x = 0; x < state.piece.matrix[y].length; x++) {
             if (!state.piece.matrix[y][x]) continue;
             this.roundRect(ctx,
-              (state.piece.x + x) * cell + 2, (ghostY + y) * cell + 2,
-              cell - 4, cell - 4, cell * 0.16);
-            ctx.fill();
+              (state.piece.x + x) * cell + 3, (ghostY + y) * cell + 3,
+              cell - 6, cell - 6, cell * 0.12);
+            ctx.stroke();
           }
         }
         ctx.restore();
@@ -178,16 +246,41 @@
       }
     }
 
-    // Flash overlay on cells about to be destroyed
+    /* Doomed blocks: a pulsing hot wash. Pure rows burn brighter, which is the
+       only feedback that tells you the 5x landed before the score moves. */
     if (state.flash && state.flash.size) {
       const t = state.flashTimer / C.FLASH_MS;
+      const pulse = 0.30 + 0.60 * Math.abs(Math.sin(t * Math.PI * 3));
       ctx.save();
-      ctx.globalAlpha = 0.35 + 0.55 * Math.abs(Math.sin(t * Math.PI * 3));
+      ctx.globalAlpha = state.flashPure ? Math.min(1, pulse * 1.25) : pulse;
       ctx.fillStyle = C.UI.flash;
+      ctx.shadowColor = state.flashPure ? '#ffe9b0' : 'rgba(255,255,255,0.8)';
+      ctx.shadowBlur = state.flashPure ? 26 : 10;
+      const self = this;
       state.flash.forEach(function (i) {
         const x = i % board.cols, y = Math.floor(i / board.cols);
-        ctx.fillRect(x * cell, y * cell, cell, cell);
+        self.roundRect(ctx, x * cell + 1, y * cell + 1, cell - 2, cell - 2, cell * 0.14);
+        ctx.fill();
       });
+      ctx.restore();
+    }
+
+    /* Danger line: once the stack gets near the ceiling, mark it. */
+    let top = board.rows;
+    for (let y = 0; y < board.rows && top === board.rows; y++) {
+      for (let x = 0; x < board.cols; x++) {
+        if (board.get(x, y)) { top = y; break; }
+      }
+    }
+    if (top <= 4) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(209,85,79,0.55)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 5]);
+      ctx.beginPath();
+      ctx.moveTo(0, 4 * cell + 0.5);
+      ctx.lineTo(this.w, 4 * cell + 0.5);
+      ctx.stroke();
       ctx.restore();
     }
   };
@@ -201,7 +294,6 @@
     ctx.clearRect(0, 0, w, h);
     if (!piece) return;
 
-    // Trim empty rows/cols so the preview is centred regardless of shape.
     const filled = [];
     for (let y = 0; y < piece.matrix.length; y++) {
       for (let x = 0; x < piece.matrix[y].length; x++) {
@@ -215,7 +307,7 @@
     const minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
     const minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
     const pw = maxX - minX + 1, ph = maxY - minY + 1;
-    const size = Math.min(w / (pw + 0.6), h / (ph + 0.6), 30);
+    const size = Math.min(w / (pw + 0.7), h / (ph + 0.7), 34);
     const ox = (w - pw * size) / 2;
     const oy = (h - ph * size) / 2;
 
@@ -226,5 +318,6 @@
   };
 
   LOL.Renderer = Renderer;
+  LOL.colorUtil = { shade: shade, rgba: rgba };
 
 })(window.LOL);
