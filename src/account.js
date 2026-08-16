@@ -49,6 +49,30 @@
     if (el.uiGoldTotal) el.uiGoldTotal.textContent = '';
   }
 
+  /* Shown after a failure, so the fix is one click away rather than buried in
+     a README. */
+  function offerDiagnostics() {
+    if (document.getElementById('btn-diagnose')) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.id = 'btn-diagnose';
+    button.className = 'ghost';
+    button.textContent = 'Check connection';
+    button.addEventListener('click', function () {
+      message('Checking…');
+      Cloud.diagnose().then(function (report) {
+        const bad = report.checks.filter(function (c) { return !c.ok; });
+        if (!bad.length) {
+          message('Everything reachable. Try again.', 'good');
+          return;
+        }
+        message(bad[0].check + ' failed — ' + bad[0].detail +
+                '  (full report in the browser console)', 'bad');
+      });
+    });
+    el.accountMsg.parentNode.appendChild(button);
+  }
+
   function renderSignedOut() {
     clearGoldTotal();
     el.accountBody.innerHTML =
@@ -115,7 +139,11 @@
 
   function handleAuthResult(res, successText) {
     setBusy(false);
-    if (!res.ok) { message(res.error, 'bad'); return; }
+    if (!res.ok) {
+      message(res.error, 'bad');
+      offerDiagnostics();
+      return;
+    }
     refreshPanel();
     message(successText, 'good');
     refreshLeaderboards();

@@ -190,3 +190,16 @@ grant select on public.leaderboard to anon, authenticated;
 grant select, insert on public.runs to authenticated;
 grant execute on function public.submit_run(integer, integer, integer, integer, integer)
   to authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- Tell PostgREST to reload its schema cache.
+--
+-- PostgREST answers /rest/v1/<table> from a cached picture of the schema. It
+-- normally refreshes on its own, but if it has not caught up yet, a table that
+-- definitely exists still answers 404. That is the single most confusing
+-- failure when setting this up, so ask for the reload explicitly.
+--
+-- If you ever see a 404 from /rest/v1/profiles again, run just this line.
+-- ---------------------------------------------------------------------
+notify pgrst, 'reload schema';

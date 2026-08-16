@@ -22,7 +22,44 @@
   const STORAGE_KEY = 'lot.session';
   const TIMEOUT_MS = 12000;
 
+  /*
+   * Normalise the project URL before anything uses it.
+   *
+   * A URL entered without a scheme ("abc.supabase.co") is not an absolute URL,
+   * so fetch resolves it against the page instead — every call then goes to
+   * your own host and comes back 404, with nothing at all appearing in the
+   * Supabase logs. That failure is very hard to read from the outside, so fix
+   * it here and say so loudly.
+   */
+  function normaliseUrl(raw) {
+    let url = String(raw || '').trim().replace(/\/+$/, '');
+    if (!url) return '';
+    if (!/^https?:\/\//i.test(url)) {
+      console.warn('[cloud] Supabase url "' + url + '" has no https:// — assuming https://' + url);
+      url = 'https://' + url;
+    }
+    return url;
+  }
+
+  const BASE = normaliseUrl(CFG.url);
+
+  function configProblem() {
+    if (!CFG.url) return 'No Supabase url set in src/supabase-config.js.';
+    if (!CFG.anonKey) return 'No anonKey set in src/supabase-config.js.';
+    if (!/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(BASE)) {
+      /* Not fatal — self-hosted projects live anywhere — but the usual cause
+         is a pasted dashboard page URL rather than the project URL. */
+      console.warn('[cloud] "' + BASE + '" does not look like a Supabase project url. ' +
+                   'Expected something like https://abcdefgh.supabase.co');
+    }
+    if (/^ey/.test(CFG.anonKey) === false && CFG.anonKey.indexOf('sb_') !== 0) {
+      console.warn('[cloud] anonKey does not look like a Supabase key.');
+    }
+    return null;
+  }
+
   const enabled = !!(CFG.url && CFG.anonKey);
+  if (enabled) configProblem();
 
   let session = null;   // { access_token, refresh_token, expires_at, user }
   let profile = null;   // { id, username, gold, high_score, ... }
@@ -93,7 +130,8 @@
       headers[k] = options.headers[k];
     });
 
-    return fetch(CFG.url.replace(/\/$/, '') + path, {
+    const target = BASE + path;
+    return fetch(target, {
       method: options.method || 'GET',
       headers: headers,
       body: options.body ? JSON.stringify(options.body) : undefined,
@@ -105,9 +143,20 @@
         let data = null;
         if (text) { try { data = JSON.parse(text); } catch (err) { data = text; } }
         if (!res.ok) {
-          const message = (data && (data.msg || data.message || data.error_description ||
-                                    data.error || data.hint)) || ('HTTP ' + res.status);
-          return { ok: false, error: String(message), status: res.status };
+          let message = (data && (data.msg || data.message || data.error_description ||
+                                  data.error || data.hint)) || ('HTTP ' + res.status);
+          /* A bare status code is useless for diagnosis. Name the endpoint,
+             and translate the two 404s that actually happen. */
+          if (res.status === 404) {
+            if (path.indexOf('/rest/v1/') === 0) {
+              message = 'Not found: ' + path.split('?')[0] +
+                        '. The table, view or function is missing — run ' +
+                        'supabase/schema.sql, then NOTIFY pgrst, \'reload schema\';';
+            } else {
+              message = 'Not found: ' + target + '. Check the url in supabase-config.js.';
+            }
+          }
+          return { ok: false, error: String(message), status: res.status, url: target };
         }
         return { ok: true, data: data, count: count };
       });
@@ -115,8 +164,11 @@
       clearTimeout(timer);
       return {
         ok: false,
-        error: err.name === 'AbortError' ? 'The server took too long to answer.'
-                                         : 'Could not reach the server.'
+        url: target,
+        error: err.name === 'AbortError'
+          ? 'The server took too long to answer (' + target + ').'
+          : 'Could not reach ' + target + '. Check the url, and that the ' +
+            'browser is not blocking the request.'
       };
     });
   }
@@ -293,8 +345,55 @@
     });
   }
 
+  /*
+   * Check every piece the game depends on, and say which one is broken.
+   * Run it from the browser console:  await LOL.Cloud.diagnose()
+   */
+  function diagnose() {
+    const report = { url: BASE, configured: enabled, checks: [] };
+
+    function note(name, ok, detail) {
+      report.checks.push({ check: name, ok: ok, detail: detail || '' });
+    }
+
+    if (!enabled) {
+      note('config', false, configProblem());
+      console.table(report.checks);
+      return Promise.resolve(report);
+    }
+    note('config', true, BASE);
+
+    return request('/auth/v1/health', { auth: false }).then(function (res) {
+      note('auth service reachable', res.ok, res.ok ? '' : res.error);
+      return request('/rest/v1/profiles?select=id&limit=1');
+    }).then(function (res) {
+      note('profiles table', res.ok, res.ok ? '' : res.error);
+      return request('/rest/v1/leaderboard?select=username&limit=1');
+    }).then(function (res) {
+      note('leaderboard view', res.ok, res.ok ? '' : res.error);
+      /* Called with no arguments on purpose: a missing function answers 404,
+         while a present one answers 400 or 401. But a network failure has no
+         status at all, and must not be read as "installed". */
+      return request('/rest/v1/rpc/submit_run', { method: 'POST', body: {} });
+    }).then(function (res) {
+      const reached = res.ok || typeof res.status === 'number';
+      const installed = reached && (res.ok || res.status !== 404);
+      note('submit_run function', installed,
+           !reached ? res.error : (installed ? '' : 'missing — run supabase/schema.sql'));
+      report.ok = report.checks.every(function (c) { return c.ok; });
+      console.table(report.checks);
+      if (!report.ok) {
+        console.warn('[cloud] see the failing rows above; README -> ' +
+                     '"Accounts and leaderboards" has the fixes.');
+      }
+      return report;
+    });
+  }
+
   LOL.Cloud = {
     enabled: enabled,
+    baseUrl: BASE,
+    diagnose: diagnose,
     get session() { return session; },
     get profile() { return profile; },
     get username() { return profile && profile.username; },

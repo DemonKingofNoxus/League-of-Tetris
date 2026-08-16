@@ -709,3 +709,5 @@ button:disabled { opacity: 0.5; cursor: default; }
 @media (max-width: 1080px) {
   #meta { grid-template-columns: 1fr; max-width: 640px; }
 }
+
+#btn-diagnose { margin-top: 10px; width: 100%; }
