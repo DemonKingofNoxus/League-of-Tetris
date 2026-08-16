@@ -93,9 +93,20 @@
   /* helpers                                                             */
   /* ------------------------------------------------------------------ */
 
+  /*
+   * Supabase Auth has no username provider — an account is keyed by an email
+   * address or a phone number — so a username is encoded as one. The player
+   * never types it, sees it or receives anything at it; it is an internal key
+   * derived from the name they chose.
+   *
+   * The fallback is the page's own hostname rather than a made-up domain: it
+   * always has a real public suffix, so it cannot trip the reserved-TLD
+   * rejection if emailDomain is left unset.
+   */
   function usernameToEmail(username) {
-    return String(username).trim().toLowerCase() + '@' +
-           (CFG.emailDomain || 'players.invalid');
+    const domain = String(CFG.emailDomain || '').trim() ||
+                   (window.location && window.location.hostname) || 'localhost.localdomain';
+    return String(username).trim().toLowerCase() + '@' + domain;
   }
 
   /* Kept strict so a username always makes a valid email local-part, and so
