@@ -9,7 +9,8 @@
     "test": "node test/engine.test.js",
     "balance": "node tools/balance.js",
     "art": "python3 tools/process-art.py",
-    "rates": "node tools/rates.js"
+    "rates": "node tools/rates.js",
+    "blocks": "python3 tools/export-blocks.py"
   },
   "engines": {
     "node": ">=14"

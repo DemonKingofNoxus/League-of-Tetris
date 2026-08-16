@@ -142,3 +142,28 @@ Say the word and I will add the code for any of these.
 | Ability icons | 64×64 PNG each | Next to champion names in the side panel |
 | Sound effects | short `.mp3`/`.ogg` | Lock, row clear, pure row, ability, game over |
 | Music | looping `.mp3`/`.ogg` | Background track |
+
+---
+
+## Block images for mockups
+
+Thirteen **512×512 JPGs**, one per region, in `assets/blocks/`. Each is a
+single game block: its colour, its gradient and gloss, and its gold crest —
+drawn with the same proportions `src/render.js` uses, so a mockup assembled
+from them looks like a real board rather than an approximation.
+
+```bash
+npm run blocks                            # 512px JPGs
+python3 tools/export-blocks.py --size 256 # any size
+python3 tools/export-blocks.py --png      # also transparent PNGs
+```
+
+The padding around each tile is symmetric, so the images **butt together edge
+to edge without seams**. Drop them on a grid at any size and the gaps between
+blocks line up the way they do in play — no manual spacing needed.
+
+`assets/blocks/_all-regions.jpg` is a contact sheet of all thirteen.
+
+Colours are read straight out of `src/config.js` when the script runs, so
+these can never drift from what the game actually renders. Change a region
+colour and re-run.
