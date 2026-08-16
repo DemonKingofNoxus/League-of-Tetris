@@ -1,4 +1,4 @@
-# Runeterra Blocks
+# League of Tetris
 
 Tetris, but every block belongs to a **region**. Rows clear the normal way — but
 a row that is **entirely one region** pays **5×**. **Champion** blocks are 1×1
