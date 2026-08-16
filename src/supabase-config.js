@@ -15,7 +15,7 @@ window.LOL = window.LOL || {};
 
 LOL.SUPABASE = {
   /* Project URL, e.g. 'https://abcdefghijklm.supabase.co' */
-  url: 'https://league-of-tetris-one.vercel.app/',
+  url: 'https://cjbhgrvgvntuolslizbp.supabase.co/',
 
   /* Project API key marked "anon" / "public" */
   anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqYmhncnZndm50dW9sc2xpemJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4OTI0MjAsImV4cCI6MjEwMjQ2ODQyMH0.EEBcGNFs83Q3nxWAVbuPZXV7HCwElJNokLr0ljtzB_k',
