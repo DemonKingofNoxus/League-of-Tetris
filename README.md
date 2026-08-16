@@ -311,7 +311,10 @@ It checks each piece in turn and prints a table saying which one is broken.
 The same check is behind the **Check connection** button that appears in the
 account panel after a failure.
 
-The two failures that actually happen:
+The three failures that actually happen:
+
+**"Email address … is invalid" on sign-up.** The `emailDomain` uses a reserved
+TLD. See *How usernames work without email* above.
 
 **404, and nothing at all in the Supabase logs.** The request never left your
 own domain. The usual cause is a project url without `https://` — `fetch`
@@ -333,10 +336,31 @@ notify pgrst, 'reload schema';
 ### How usernames work without email
 
 Supabase always wants an email address. Each username is mapped to
-`<username>@<emailDomain>` from `supabase-config.js`, which is never sent
-anywhere. The default domain ends in `.invalid`, a reserved suffix that can
-never be a real domain, so a player account can never collide with a real
-mailbox.
+`<username>@<emailDomain>` from `supabase-config.js`. No mail is ever sent to
+it, and the player never sees it.
+
+**The domain must have a real public suffix.** Supabase Auth validates the
+address and rejects the reserved test TLDs — `.invalid`, `.test`, `.example`,
+`.local`, `.localhost` — with *Email address "…" is invalid*. Those are the
+intuitive choice for a deliberately-fake address and are exactly the ones that
+fail. The client now refuses them up front, warns in the console, and flags
+them in `diagnose()`, rather than letting every signup die with a message
+about email that makes no sense to someone who only typed a username.
+
+A domain **you already own** is the right answer. It can never collide with a
+stranger's real mailbox, and it needs no mail server, because nothing is ever
+delivered. The default is the site's own Vercel domain:
+
+```js
+emailDomain: 'league-of-tetris-one.vercel.app'
+```
+
+If your Supabase project rejects that too, use any other domain you control —
+a custom domain, or a subdomain of one. Failing that, a mailbox provider's
+domain works, at the cost of colliding with real addresses.
+
+**Settle on this before real players sign up.** The address is what identifies
+an account, so changing `emailDomain` later orphans every existing one.
 
 Usernames are 3–16 characters of letters, numbers and underscore — enforced in
 the client, and again by a `CHECK` constraint in the database.

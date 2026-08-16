@@ -22,9 +22,20 @@ LOL.SUPABASE = {
 
   /*
    * Supabase always wants an email address, but we only ask players for a
-   * username. Each username is mapped to "<username>@<emailDomain>", which is
-   * never sent anywhere. Keep this on a domain you do not own, so a real
-   * mailbox can never collide with a player account.
+   * username. Each username is mapped to "<username>@<emailDomain>". No mail
+   * is ever sent to it.
+   *
+   * It must be a domain with a REAL public suffix. Supabase Auth validates the
+   * address and rejects the reserved test TLDs — .invalid, .test, .example,
+   * .local, .localhost — with "Email address ... is invalid". Those look like
+   * the obvious choice for a fake address and are exactly the ones that fail.
+   *
+   * A domain you already own is the right answer: it can never collide with a
+   * stranger's real mailbox, and it needs no mail server, because nothing is
+   * ever delivered to it. This is the site's own Vercel domain.
+   *
+   * Changing this later orphans every existing account — the addresses are
+   * what identify them — so settle on it before real players sign up.
    */
-  emailDomain: 'players.league-of-tetris.invalid'
+  emailDomain: 'league-of-tetris-one.vercel.app'
 };

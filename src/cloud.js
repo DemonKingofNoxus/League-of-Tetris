@@ -55,6 +55,31 @@
     if (/^ey/.test(CFG.anonKey) === false && CFG.anonKey.indexOf('sb_') !== 0) {
       console.warn('[cloud] anonKey does not look like a Supabase key.');
     }
+    const domainProblem = emailDomainProblem();
+    if (domainProblem) console.warn('[cloud] ' + domainProblem);
+    return null;
+  }
+
+  /*
+   * Supabase Auth validates the address it is given, and rejects the reserved
+   * test TLDs from RFC 2606 and RFC 6761. They are the intuitive pick for a
+   * synthetic address and the ones that always fail, so catch it here instead
+   * of letting every signup die with a confusing message about email.
+   */
+  const RESERVED_TLDS = ['invalid', 'test', 'example', 'localhost', 'local'];
+
+  function emailDomainProblem() {
+    const domain = String(CFG.emailDomain || '').trim().toLowerCase();
+    if (!domain) return 'No emailDomain set in src/supabase-config.js.';
+    if (domain.indexOf('.') === -1) {
+      return 'emailDomain "' + domain + '" has no dot; Supabase will reject it.';
+    }
+    const tld = domain.split('.').pop();
+    if (RESERVED_TLDS.indexOf(tld) !== -1) {
+      return 'emailDomain "' + domain + '" ends in the reserved TLD ".' + tld +
+             '". Supabase Auth rejects these — use a domain you own, such as ' +
+             'the one this game is hosted on.';
+    }
     return null;
   }
 
@@ -222,10 +247,19 @@
       }
     }).then(function (res) {
       if (!res.ok) {
-        /* Supabase reports a taken address in the language of emails, which
+        /* Supabase reports both of these in the language of emails, which
            would be baffling to someone who only typed a username. */
         if (/already registered|already exists|duplicate/i.test(res.error)) {
           return { ok: false, error: 'That username is taken.' };
+        }
+        if (/email address.*invalid|invalid.*email/i.test(res.error)) {
+          return {
+            ok: false,
+            error: 'Supabase rejected the generated address (' +
+                   usernameToEmail(username) + '). Change emailDomain in ' +
+                   'src/supabase-config.js to a domain with a real public ' +
+                   'suffix — reserved TLDs like .invalid are refused.'
+          };
         }
         return res;
       }
@@ -362,6 +396,8 @@
       return Promise.resolve(report);
     }
     note('config', true, BASE);
+    const domainProblem = emailDomainProblem();
+    note('email domain', !domainProblem, domainProblem || CFG.emailDomain);
 
     return request('/auth/v1/health', { auth: false }).then(function (res) {
       note('auth service reachable', res.ok, res.ok ? '' : res.error);
@@ -399,6 +435,8 @@
     get username() { return profile && profile.username; },
     validateUsername: validateUsername,
     validatePassword: validatePassword,
+    emailDomainProblem: emailDomainProblem,
+    usernameToEmail: usernameToEmail,
     signUp: signUp,
     signIn: signIn,
     signOut: signOut,
