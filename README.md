@@ -299,6 +299,37 @@ Turning it on takes about five minutes:
 
 That is it. The account panel under the board turns into a sign-up form.
 
+### If sign-up fails
+
+Open the browser console and run:
+
+```js
+await LOL.Cloud.diagnose()
+```
+
+It checks each piece in turn and prints a table saying which one is broken.
+The same check is behind the **Check connection** button that appears in the
+account panel after a failure.
+
+The two failures that actually happen:
+
+**404, and nothing at all in the Supabase logs.** The request never left your
+own domain. The usual cause is a project url without `https://` — `fetch`
+treats `abc.supabase.co` as a *relative path*, so the call goes to your own
+host and your host answers 404. The url is now normalised automatically and
+warns in the console, but check `src/supabase-config.js` reads
+`https://<project>.supabase.co`.
+
+**404 from `/rest/v1/profiles` after the schema ran fine.** PostgREST serves
+those endpoints from a cached picture of the schema, and a table that
+definitely exists still answers 404 until it catches up. Run:
+
+```sql
+notify pgrst, 'reload schema';
+```
+
+`supabase/schema.sql` ends with that line, so a full re-run also fixes it.
+
 ### How usernames work without email
 
 Supabase always wants an email address. Each username is mapped to
