@@ -120,10 +120,32 @@ You listed Caitlyn under Bilgewater, but you also listed Pyke there and shipped
 a Piltover crest — so Caitlyn is Piltover here, which makes it exactly one
 champion per region.
 
-### High scores
+### Gold
 
-Kept in memory for the session and shown beside the board. **A page refresh
-clears them** — that is deliberate until there is an account system.
+Gold is earned only for playing the game's own systems, never for merely
+surviving:
+
+| Event | Gold |
+| --- | --- |
+| A champion ability lands | **1 per block destroyed** |
+| A row clears in a single region | **5 per block** — 60 on a 12-wide board |
+| An ordinary mixed row clears | **nothing** |
+| Chain step beyond the first | **+25%** each |
+| Every level above 1 | **+5%** each |
+
+A ~300-piece game (roughly seven minutes) pays about **500 gold**, or ~70 per
+minute, measured with `tools/balance.js`. Nearly all of it comes from
+champion abilities; a pure row is a rare jackpot. Useful when you set shop
+prices later: a skin at 2,500 is about five good games, an unlock at 5,000
+about ten.
+
+The rates are `GOLD_*` in `src/config.js`.
+
+### High scores and accounts
+
+Without an account, high scores stay in memory and a refresh clears them.
+**With an account, gold and high scores are saved** and you appear on the
+public leaderboard. See below.
 
 ---
 
@@ -133,7 +155,11 @@ clears them** — that is deliberate until there is an account system.
 index.html          markup + panel layout
 css/style.css       all styling
 src/config.js       ← REGIONS, CHAMPIONS, rates, per-level tables. Edit this one.
+src/supabase-config.js  your project URL + anon key (optional)
 src/tuning.js       resolves "what is this number at level N?"
+src/gold.js         what each event is worth in gold
+src/cloud.js        accounts, gold and leaderboards over Supabase's REST API
+src/account.js      the account panel and leaderboard UI
 src/assets.js       image loading, with fallback when art is missing
 src/engine.js       pure rules: board, pieces, rows, gravity, contact triggers
 src/abilities.js    the thirteen champion effects
@@ -143,6 +169,7 @@ test/engine.test.js headless rule tests
 tools/process-art.py  turns assets/source/ into game-ready tiles
 tools/balance.js    simulates a good player to check the game is survivable
 tools/rates.js      prints the effective probabilities, level by level
+supabase/schema.sql tables, policies and the submit_run function
 assets/source/      your original art, untouched
 assets/regions/     generated 128px region tiles
 assets/champions/   generated 128px champion portraits
@@ -249,6 +276,60 @@ for variety both make "entirely one region" harder. Those two requests pull
 against the 5× bonus. If pure rows feel too rare when you play it, raise
 `FEATURED_SHARE` toward 0.85 (more of one region at a time) or drop `COLS`
 back to 10 — both are one-line changes in `src/config.js`.
+
+---
+
+## Accounts and leaderboards
+
+Optional. Leave it unconfigured and the game runs exactly as before — local
+session scores, gold tracked for the run only, and the account panel says it
+is switched off. Nothing else changes.
+
+Turning it on takes about five minutes:
+
+1. **Create a project** at [supabase.com](https://supabase.com) (the free tier
+   is plenty).
+2. **Run the schema.** Open the SQL editor, paste all of
+   [`supabase/schema.sql`](supabase/schema.sql), run it once.
+3. **Switch off email confirmation.** Authentication → Providers → Email →
+   *Confirm email* = **off**. Players sign up with a username only, so there is
+   no mailbox to confirm.
+4. **Fill in `src/supabase-config.js`** with your project URL and the key
+   marked **anon / public** (Project Settings → API).
+
+That is it. The account panel under the board turns into a sign-up form.
+
+### How usernames work without email
+
+Supabase always wants an email address. Each username is mapped to
+`<username>@<emailDomain>` from `supabase-config.js`, which is never sent
+anywhere. The default domain ends in `.invalid`, a reserved suffix that can
+never be a real domain, so a player account can never collide with a real
+mailbox.
+
+Usernames are 3–16 characters of letters, numbers and underscore — enforced in
+the client, and again by a `CHECK` constraint in the database.
+
+### What is public and what is protected
+
+The anon key is public by design; anyone can read it out of the page source.
+**The Row Level Security policies in the schema are what protect the data**,
+not the key:
+
+- `profiles` is readable by anyone — that is what makes the leaderboard work.
+- **No client can INSERT, UPDATE or DELETE a profile.** Creation happens in a
+  signup trigger; changes go only through the `submit_run` function, which
+  takes `greatest(old, new)` for the high score and *adds* gold. A weak run can
+  never lower a record.
+- `runs` are readable only by their owner.
+- The leaderboard is a **view** exposing exactly four columns, so anything
+  added to `profiles` later cannot leak into it by accident.
+
+**One honest limitation:** `submit_run` still trusts the numbers the client
+sends. Somebody who edits the JavaScript can claim any score. The function
+rejects negatives, impossible values and absurd magnitudes, which stops
+accidents and casual tampering, but a determined cheat needs the run
+simulated server-side. Worth knowing before you promote the leaderboard.
 
 ---
 

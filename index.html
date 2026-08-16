@@ -29,6 +29,12 @@
         <div class="stat stat-score" id="ui-score">0</div>
       </section>
 
+      <section class="panel panel-gold">
+        <h2>Gold <em id="ui-gold-total"></em></h2>
+        <div class="stat stat-gold" id="ui-gold">0</div>
+        <p class="progress-note">earned this run</p>
+      </section>
+
       <section class="panel panel-level">
         <h2>Level <b id="ui-level">1</b></h2>
         <div class="progress"><i id="ui-progress" style="width:0%"></i></div>
@@ -98,6 +104,34 @@
 
   </main>
 
+  <!-- ---------- account + leaderboard ---------- -->
+  <section id="meta">
+
+    <div class="panel" id="account-panel">
+      <h2>Account</h2>
+      <div id="account-body"></div>
+      <p id="account-msg" class="account-msg"></p>
+    </div>
+
+    <div class="panel" id="leaderboard-panel">
+      <h2>Leaderboard <em>top 10</em></h2>
+      <ol id="lb-list" class="lb-list"><li class="empty">loading…</li></ol>
+      <div id="lb-you" class="lb-you"></div>
+      <button type="button" id="lb-open" class="ghost">View top 100</button>
+    </div>
+
+  </section>
+
+  <div id="lb-modal" class="lb-modal hidden">
+    <div class="lb-modal-card">
+      <header>
+        <h2>Top 100</h2>
+        <button type="button" id="lb-modal-close" aria-label="Close">×</button>
+      </header>
+      <ol id="lb-modal-list" class="lb-list"></ol>
+    </div>
+  </div>
+
   <!-- ---------- touch controls ---------- -->
   <div id="touch" class="touch">
     <button data-act="left"  type="button" aria-label="Move left">◀</button>
@@ -127,11 +161,15 @@
 </div>
 
 <script src="src/config.js"></script>
+<script src="src/supabase-config.js"></script>
 <script src="src/tuning.js"></script>
+<script src="src/gold.js"></script>
+<script src="src/cloud.js"></script>
 <script src="src/assets.js"></script>
 <script src="src/engine.js"></script>
 <script src="src/abilities.js"></script>
 <script src="src/render.js"></script>
+<script src="src/account.js"></script>
 <script src="src/main.js"></script>
 </body>
 </html>

@@ -93,8 +93,19 @@ LOL.CONFIG = {
   SCORE_HARD_DROP: 2,
   SCORE_ABILITY: 50,
 
+  /* ---------- gold ----------
+     Gold is earned only for things beyond ordinary Tetris: champion abilities
+     landing, and rows that come out in a single region. Clearing a plain
+     mixed row pays score but no gold, so gold measures how well you played
+     the region and champion systems rather than how long you survived. */
+  GOLD_PER_ABILITY_BLOCK: 1,   // per block a champion ability destroys
+  GOLD_PURE_ROW_PER_BLOCK: 5,  // per block in a single-region row
+  GOLD_PER_ROW_BLOCK: 0,       // per block in an ordinary mixed row
+  GOLD_CHAIN_BONUS: 0.25,      // extra fraction per chain step beyond the first
+  GOLD_LEVEL_BONUS: 0.05,      // extra fraction per level above 1
+
   /* ---------- high scores ---------- */
-  HIGHSCORE_LIMIT: 8,     // kept in memory only; a refresh clears them
+  HIGHSCORE_LIMIT: 8,     // local list, kept in memory only
 
   /* ---------- palette ---------- */
   UI: {

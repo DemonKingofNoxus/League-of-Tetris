@@ -503,3 +503,209 @@ kbd {
   .board-frame { padding: 6px; }
   .panel { flex-basis: 100%; }
 }
+
+/* ==========================================================================
+   Gold, account and leaderboards
+   ========================================================================== */
+
+.stat-gold {
+  background: linear-gradient(180deg, #ffeeb8, #e0b64c 55%, #9a7326);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.panel-gold h2 em { color: var(--gold-2); font-size: 11px; opacity: 1; }
+
+/* ---------- layout ---------- */
+
+#meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  max-width: 780px;
+  margin: 26px auto 0;
+}
+
+/* ---------- auth form ---------- */
+
+.auth-form { display: flex; flex-direction: column; gap: 8px; }
+
+.auth-form input {
+  background: rgba(0,0,0,0.42);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 9px 11px;
+  color: var(--text);
+  font: 13px var(--sans);
+  letter-spacing: 0.02em;
+}
+.auth-form input:focus {
+  outline: none;
+  border-color: var(--gold-2);
+  box-shadow: 0 0 0 1px rgba(201,162,94,0.25);
+}
+.auth-form input::placeholder { color: var(--dim); }
+
+.auth-buttons { display: flex; gap: 8px; margin-top: 2px; }
+.auth-buttons button { flex: 1; }
+
+button.ghost {
+  background: transparent;
+  color: var(--gold-2);
+  border: 1px solid var(--gold-3);
+  border-radius: 2px;
+  padding: 9px 16px;
+  font: 700 11px var(--sans);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: none;
+}
+button.ghost:hover { background: rgba(201,162,94,0.12); }
+button:disabled { opacity: 0.5; cursor: default; }
+
+.auth-form button[type="submit"] {
+  background: linear-gradient(180deg, var(--gold-1), var(--gold-2));
+  color: #221a08;
+  border: 1px solid var(--gold-3);
+  border-radius: 2px;
+  padding: 9px 16px;
+  font: 700 11px var(--sans);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.auth-note { margin: 10px 0 0; font-size: 11px; color: var(--dim); line-height: 1.5; }
+.auth-note code {
+  font: 10.5px var(--mono);
+  color: var(--gold-2);
+  background: rgba(0,0,0,0.4);
+  padding: 1px 4px;
+}
+.auth-note.offline { color: var(--muted); }
+
+.account-msg { margin: 9px 0 0; font-size: 11.5px; min-height: 1.2em; color: var(--muted); }
+.account-msg.bad { color: var(--danger); }
+.account-msg.good { color: var(--pure); }
+
+/* ---------- signed-in summary ---------- */
+
+.account-in .who { display: flex; align-items: baseline; gap: 9px; }
+.account-in .who b { font-family: var(--serif); font-size: 20px; color: var(--gold-1); }
+.account-in .who span { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
+
+.account-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 13px 0 14px;
+}
+.account-stats div { min-width: 0; }
+.account-stats dt {
+  font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--dim);
+}
+.account-stats dd {
+  margin: 2px 0 0;
+  font-family: var(--serif);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.account-stats dd.gold { color: var(--gold-1); }
+
+/* ---------- leaderboard ---------- */
+
+.lb-list { list-style: none; margin: 0 0 12px; padding: 0; }
+.lb-list li {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 4px 0;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.lb-list li:first-child { border-top: 0; }
+.lb-list .rank { color: var(--dim); font-size: 10px; }
+.lb-list .who { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-list .pts { font-family: var(--serif); font-size: 14px; color: var(--gold-1); }
+.lb-list li.mine { background: rgba(201,162,94,0.10); }
+.lb-list li.mine .who { color: var(--gold-1); font-weight: 600; }
+.lb-list li.empty { display: block; grid-template-columns: none; }
+
+.lb-you {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 0 12px;
+  border-top: 1px solid var(--gold-3);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.lb-you:empty { display: none; }
+.lb-you .label { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
+.lb-you .rank { font-family: var(--serif); font-size: 16px; color: var(--gold-1); }
+.lb-you .who { color: var(--text); }
+.lb-you .pts { margin-left: auto; font-family: var(--serif); font-size: 16px; color: var(--gold-1); }
+
+#lb-open { width: 100%; }
+
+/* ---------- top-100 modal ---------- */
+
+.lb-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4,6,10,0.86);
+  backdrop-filter: blur(3px);
+}
+.lb-modal.hidden { display: none; }
+
+.lb-modal-card {
+  width: min(520px, 100%);
+  max-height: min(78vh, 760px);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--line);
+  box-shadow: 0 30px 80px rgba(0,0,0,0.7);
+}
+.lb-modal-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.lb-modal-card h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 20px;
+  letter-spacing: 0.1em;
+  color: var(--gold-1);
+  text-transform: none;
+}
+.lb-modal-card header button {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.lb-modal-card header button:hover { color: var(--gold-1); }
+.lb-modal-card .lb-list {
+  margin: 0;
+  padding: 10px 18px 18px;
+  overflow-y: auto;
+}
+
+@media (max-width: 1080px) {
+  #meta { grid-template-columns: 1fr; max-width: 640px; }
+}

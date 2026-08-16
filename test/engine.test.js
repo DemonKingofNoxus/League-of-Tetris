@@ -3,6 +3,7 @@ global.window = global; // browser scripts assign window.LOL and then read bare 
 const path = require('path');
 require(path.join(__dirname, '../src/config.js'));
 require(path.join(__dirname, '../src/tuning.js'));
+require(path.join(__dirname, '../src/gold.js'));
 require(path.join(__dirname, '../src/engine.js'));
 require(path.join(__dirname, '../src/abilities.js'));
 
@@ -10,6 +11,7 @@ const LOL = global.window.LOL;
 const E = LOL.Engine;
 const C = LOL.CONFIG;
 const T = LOL.Tuning;
+const G = LOL.Gold;
 let fails = 0;
 function check(name, cond) {
   console.log((cond ? '  ok   ' : '  FAIL ') + name);
@@ -480,6 +482,45 @@ C.LEVEL_TUNING = savedTuning;
 C.LEVEL_CHAMPION_WEIGHTS = savedWeights;
 T.setLevel(1);
 E.setActiveRegions(LOL.REGION_KEYS);
+
+/* ------------------------------------------------------------------ */
+section('gold');
+
+check('an ability pays per block destroyed',
+  G.forAbility(10, 1, 1) === 10 * C.GOLD_PER_ABILITY_BLOCK);
+check('destroying nothing pays nothing', G.forAbility(0, 1, 1) === 0);
+
+check('a pure row pays per block in the row',
+  G.forRows([{ y: 0, region: 'noxus' }], C.COLS, 1, 1) ===
+  C.COLS * C.GOLD_PURE_ROW_PER_BLOCK);
+
+check('an ordinary mixed row pays no gold',
+  G.forRows([{ y: 0, region: null }], C.COLS, 1, 1) === 0);
+
+check('a mixed batch pays only for the pure rows',
+  G.forRows([{ y: 0, region: 'noxus' }, { y: 1, region: null }], C.COLS, 1, 1) ===
+  C.COLS * C.GOLD_PURE_ROW_PER_BLOCK);
+
+check('no rows pays nothing', G.forRows([], C.COLS, 1, 1) === 0);
+
+/* Chains and levels add on top, and never subtract. */
+check('a chain pays more than the same blocks cold',
+  G.forAbility(10, 3, 1) > G.forAbility(10, 1, 1));
+check('a later level pays more than the same blocks at level 1',
+  G.forAbility(10, 1, 6) > G.forAbility(10, 1, 1));
+check('chain 1 at level 1 is the plain rate', G.multiplier(1, 1) === 1);
+check('the multiplier is never below 1',
+  G.multiplier(0, 0) >= 1 && G.multiplier(1, 1) >= 1);
+
+/* The exact compounding, so a config change cannot silently alter it. */
+const expected = 10 * C.GOLD_PER_ABILITY_BLOCK *
+  (1 + 2 * C.GOLD_CHAIN_BONUS) * (1 + 4 * C.GOLD_LEVEL_BONUS);
+check('chain and level bonuses compound as documented',
+  G.forAbility(10, 3, 5) === Math.round(expected));
+
+check('gold is always a whole number',
+  Number.isInteger(G.forAbility(7, 4, 9)) &&
+  Number.isInteger(G.forRows([{ y: 0, region: 'ionia' }], 12, 3, 7)));
 
 /* ------------------------------------------------------------------ */
 section('full resolve soak');

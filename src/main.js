@@ -7,10 +7,12 @@
   const C = LOL.CONFIG;
   const E = LOL.Engine;
   const T = LOL.Tuning;
+  const G = LOL.Gold;
 
   const el = {};
   ['board', 'next', 'ui-score', 'ui-level', 'ui-rows', 'ui-pure', 'ui-progress',
    'ui-target', 'ui-nextlevel', 'ui-champs', 'ui-regions', 'ui-region-count', 'ui-highscores',
+   'ui-gold',
    'overlay', 'overlay-title', 'overlay-body', 'overlay-btn', 'toast',
    'banner', 'banner-title', 'banner-sub', 'touch'
   ].forEach(function (id) {
@@ -107,6 +109,7 @@
       flashPure: false,
       flashTimer: 0,
       pendingRows: null,
+      pendingGold: 0,
       resolveSteps: 0,
       chain: 0,
       bestChain: 0,
@@ -114,6 +117,7 @@
       level: 1,
       rowsCleared: 0,
       pureRows: 0,
+      gold: 0,
       recorded: false
     };
 
@@ -148,6 +152,10 @@
     if (trig) {
       const result = LOL.Abilities.trigger(state.board, trig.x, trig.y);
       if (result) {
+        /* Gold for the ability is settled here rather than in commitFlash,
+           where the chain counter has already moved on. */
+        state.pendingGold = G.forAbility(result.destroy.length,
+                                         state.chain + 1, state.level);
         state.score += C.SCORE_ABILITY + (result.bonus || 0);
         toast(result.champ.name + ' — ' + result.champ.abilityName +
               (result.chained && result.chained.length
@@ -167,6 +175,7 @@
         for (let x = 0; x < board.cols; x++) cells.add(board.idx(x, r.y));
       });
       state.pendingRows = rows;
+      state.pendingGold = G.forRows(rows, board.cols, state.chain + 1, state.level);
       startFlash(cells, 'rows', rows.some(function (r) { return !!r.region; }));
       return;
     }
@@ -185,6 +194,10 @@
   function commitFlash() {
     state.chain++;
     state.bestChain = Math.max(state.bestChain, state.chain);
+
+    const goldEarned = state.pendingGold || 0;
+    state.gold += goldEarned;
+    state.pendingGold = 0;
 
     if (state.flashKind === 'rows') {
       const rows = state.pendingRows;
@@ -207,7 +220,8 @@
 
       if (pureRegion) {
         toast('PURE ' + LOL.REGIONS[pureRegion].name.toUpperCase() +
-              '  ×' + C.PURE_ROW_MULTIPLIER);
+              '  ×' + C.PURE_ROW_MULTIPLIER +
+              (goldEarned ? '   +' + goldEarned + ' gold' : ''));
       } else if (state.chain > 1) {
         toast('Chain ×' + state.chain);
       }
@@ -305,10 +319,39 @@
     state.phase = 'gameover';
     state.pieceVisible = false;
     recordScore();
-    showOverlay('Game over',
-      state.score.toLocaleString() + ' points · level ' + state.level + ' · ' +
-      state.rowsCleared + ' rows (' + state.pureRows + ' pure)',
-      'Play again');
+
+    const summary = state.score.toLocaleString() + ' points · level ' + state.level +
+      ' · ' + state.rowsCleared + ' rows (' + state.pureRows + ' pure) · ' +
+      state.gold.toLocaleString() + ' gold';
+    showOverlay('Game over', summary, 'Play again');
+
+    submitRun(summary);
+  }
+
+  /* Push the run to the account, if there is one. Failure is reported in the
+     account panel and never blocks starting another game. */
+  function submitRun(summary) {
+    const Cloud = LOL.Cloud;
+    if (!Cloud || !Cloud.enabled || !Cloud.profile) return;
+
+    const run = {
+      score: state.score,
+      level: state.level,
+      rows: state.rowsCleared,
+      pure: state.pureRows,
+      gold: state.gold
+    };
+
+    Cloud.submitRun(run).then(function (res) {
+      if (!res.ok) {
+        LOL.Account.message('Run not saved: ' + res.error, 'bad');
+        return;
+      }
+      LOL.Account.message('Saved. +' + run.gold.toLocaleString() + ' gold.', 'good');
+      LOL.Account.refreshPanel();
+      LOL.Account.refreshLeaderboards();
+      showOverlay('Game over', summary, 'Play again');
+    });
   }
 
   /* ------------------------------------------------------------------ */
@@ -324,6 +367,7 @@
       level: state.level,
       rows: state.rowsCleared,
       pure: state.pureRows,
+      gold: state.gold,
       fresh: true
     };
     highScores.forEach(function (h) { h.fresh = false; });
@@ -342,7 +386,8 @@
       return '<li class="' + (h.fresh ? 'fresh' : '') + '">' +
              '<span class="rank">' + (i + 1) + '</span>' +
              '<span class="pts">' + h.score.toLocaleString() + '</span>' +
-             '<span class="meta">L' + h.level + ' · ' + h.rows + 'r · ' + h.pure + 'p</span>' +
+             '<span class="meta">L' + h.level + ' · ' + h.rows + 'r · ' +
+               (h.gold || 0).toLocaleString() + 'g</span>' +
              '</li>';
     }).join('');
   }
@@ -409,6 +454,7 @@
     el.uiLevel.textContent = state.level;
     el.uiRows.textContent = state.rowsCleared;
     el.uiPure.textContent = state.pureRows;
+    el.uiGold.textContent = state.gold.toLocaleString();
 
     const target = targetFor(state.level);
     const floor = state.level > 1 ? targetFor(state.level - 1) : 0;
@@ -532,6 +578,7 @@
     renderer = new LOL.Renderer(el.board, el.next);
     newGame();
     syncHighScores();
+    if (LOL.Account) LOL.Account.init();
 
     /* The featured region rotates as pieces are generated, so refresh the
        roster periodically rather than on every frame. */
